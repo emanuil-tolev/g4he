@@ -1,0 +1,15 @@
+*.pyc
+store/*
+*.egg-info/*
+.*.swp
+sandbox/*
+src*
+.DS_Store
+.Python
+extra/*
+media/*
+build/*
+dist/*
+gallery/*
+app.cfg
+
