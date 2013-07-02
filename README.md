@@ -1,5 +1,5 @@
-# Issue Tracker
+# Gateway 4 Higher Education
 
-This is a repository to represent the general requirements and issues for the G4HE project.  See the issue tracker for the project here:
+Main application presenting the reporting front end for the G4HE service.
 
-[https://github.com/g4he/issuetracker/issues](https://github.com/g4he/issuetracker/issues)
+[https://github.com/g4he/g4he/issues](https://github.com/g4he/g4he/issues)
