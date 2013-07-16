@@ -27,6 +27,7 @@ from portality.view.package import blueprint as package
 from portality.view.padthru import blueprint as padthru
 from portality.view.search import blueprint as search
 from portality.view.jsite import blueprint as jsite
+from portality.view.collab import blueprint as collab
 
 
 app.register_blueprint(account, url_prefix='/account')
@@ -41,6 +42,7 @@ app.register_blueprint(stream, url_prefix='/stream')
 app.register_blueprint(package, url_prefix='/package')
 app.register_blueprint(padthru, url_prefix='/padthru')
 app.register_blueprint(search, url_prefix='/search')
+app.register_blueprint(collab, url_prefix="/collab")
 app.register_blueprint(jsite)
 
 

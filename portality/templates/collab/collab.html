@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<script type="text/javascript">
+$(document).ready(function() {
+    // set up the table sorter on the results
+    $("#collaborations").tablesorter();   
+    $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
+    
+    $("a.reporturl").each(function() {
+        // determine if there are any orgs to exclude
+        exclude_list = $(this).attr("data-exclude-orgs")
+        exclude_orgs = []
+        if (exclude_list != null && exclude_list != "")
+        {
+            exclude_orgs = exclude_list.split(",")
+        }
+        
+        // determine if we should omit the funder
+        exclude_funder = $(this).attr("data-exclude-funder")
+        
+        // find out the format of the desired data
+        format = $(this).attr("data-format")
+        
+        // see if there are any orgs to add to the list of collaborators
+        add_orgs = $(this).attr("data-add-orgs")
+        
+        // see if there is a funder to add
+        add_funder = $(this).attr("data-add-funder")
+        
+        $(this).attr("href", reportUrl(exclude_orgs, exclude_funder, format, add_orgs, add_funder))
+    });
+    
+    function reportUrl(exclude_orgs, exclude_funder, format, add_orgs) {
+        var prefix = "/collab"
+        var mainorg = "{{mainorg}}"
+        var collab = "{{collab_orgs|join(',')}}"
+        var collab_orgs = collab.split(",")
+        var funder = {% if funder %} "{{funder}}" {% else %} null {% endif %}
+        var start = {% if start %} "{{ start }}" {% else %} null {% endif %}
+        var end = {% if end %} "{{ end }}" {% else %} null {% endif %}
+        var upper = {% if upper %} "{{ upper }}" {% else %} null {% endif %}
+        var lower = {% if lower %} "{{ lower }}" {% else %} null {% endif %}
+        
+        // deal with the normal org prefix, which is always present
+        var url = prefix + "?org=" + mainorg
+        
+        // add any collaborators, excluding those specifically requested to exclude,
+        // and adding those which should be added
+        var collab_frag = ""
+        if (!exclude_orgs) {
+            exclude_orgs = []
+        }
+        for (i in collab_orgs) {
+            if ($.inArray(collab_orgs[i], exclude_orgs) == -1) {
+                if (i > 0) {
+                    collab_frag += ","
+                }
+                collab_frag += collab_orgs[i]
+            }
+        }
+        if (add_orgs && $.inArray(add_orgs, collab_orgs) == -1) {
+            if (collab_frag != "") {
+                collab_frag += ","
+            }
+            collab_frag += add_orgs
+        }
+        if (collab_frag != "") {
+            url += "&collab=" + collab_frag
+        }
+        
+        // add the funder if necessary
+        if ((funder || add_funder) && !exclude_funder) {
+            f = funder ? funder : add_funder
+            url += "&funder=" + f
+        }
+        
+        // set the output format
+        if (format) {
+            url += "&format=" + format
+        }
+        
+        // add the start and end date constraints if they exist
+        if (start) {
+            url += "&start=" + start
+        }
+        if (end) {
+            url += "&end=" + end
+        }
+        
+        // add the upper and lower value constraints if they exist
+        if (upper) {
+            url += "&upper=" + upper
+        }
+        if (lower) {
+            url += "&lower=" + lower
+        }
+        
+        return url
+    }
+}); 
+</script>
+
+<a href="#" class="reporturl">full url</a>
+
+<h1>Collaboration Report for {{ mainorg }}</h1>
+
+{% if collab_orgs|length > 0 %}
+    <h2>showing collaborations with 
+    {% for org in collab_orgs %}
+        {{org}} (<a href="#" class="reporturl" data-exclude-orgs="{{org}}">X</a>)
+        {% if not loop.last %}, {% endif %}
+    {% endfor %}</h2>
+{% endif %}
+{% if funder %}
+    <h2>showing work funded by {{ funder }} (<a href="#" class="reporturl" data-exclude-funder="true">X</a>)</h2>
+{% endif %}
+<br><br>
+
+<div class="row-fluid">
+    <div class="span12 well">
+        <h3>Report Options</h3>
+        <form method="GET" action="/collab">
+            <!-- hidden fields -->
+            <input type="hidden" name="org" value="{{mainorg}}">
+            <input type="hidden" name="collab" value="{{collab_orgs|join(',')}}">
+            {% if funder %}<input type="hidden" name="funder" value="{{funder}}">{% endif %}
+            
+            <!-- date selector -->
+            <p>Projects active between: <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
+            
+            <!-- project value selector -->
+            <p>Projects with a funded value between: <input type="text" name="lower" value="{% if lower %}{{lower}}{% endif %}"> and <input type="text" name="upper" value="{% if upper %}{{ upper }}{% endif %}"></p>
+            
+            <!-- collaborator facet -->
+            <p>Collaborators: <select name="collab1"> <!-- bit of a fudge, better option required, probably through real JS UI -->
+                <option value="">Add a collaborator ...</option>
+                {% for f in facets.collaborators.terms %}
+                    {% if f.term != mainorg and f.term not in collab_orgs %}
+                        <option value="{{f.term}}">{{f.term}} ({{f.count}} project{% if f.count > 1 %}s{% endif %})</option>
+                    {% endif %}
+                {% endfor %}
+            </select></p>
+            
+            <input type="submit" name="submit_options" value="Update">
+        </form>
+    </div>
+</div>
+
+{% if report|length > 0 %}
+    <h2>
+        {{ facets.collaborators.terms|length - 1 }} collaborators 
+        over {{count}} project{% if count > 1 %}s{% endif %}
+        totalling £{{'%i' % facets.value_stats.total}} in funding
+    </h2>
+{% else %}
+    <h2>No results</h2>
+{% endif %}
+
+<div class="row-fluid">
+    <div class="span12" style="text-align: right"><a href="#" class="reporturl" data-format="csv">download as csv</a></div>
+</div>
+
+    <table id="collaborations" class="tablesorter">
+    <thead>
+        <tr>
+            <th>Collaborator</th>
+            <th>Project Title</th>
+            <th>Collaboration Size</th>
+            <th>Funding</th>
+            <th>Funder</th>
+            <th>Award Ref</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in report %}
+        <tr>
+            <td><a data-add-orgs="{{row['collaborator']}}" class="reporturl" href="#">{{ row['collaborator'] }}</a></td>
+            <td><a href="/collab/project/{{row['data']['id']}}?org={{ mainorg }}">{{ row['projectTitle'] }}</a></td>
+            <td>{{ row['collaborationSize'] }}</td>
+            <td>£{{ row['projectValue'] }}</td>
+            <td><a class="reporturl" href="#" data-add-funder="{{row['funder']}}">{{ row['funder'] }}</a></td>
+            <td>{{ row['awardRef'] }}</td>
+            <td>{{ row['startDate'] }}</td>
+            <td>{{ row['endDate'] }}</td>
+        </tr>
+    {% endfor %}
+    {% if report|length == 0 %}
+        <tr><td colspan="8">Your report parameters did not yield any collaborations</td></tr>
+    {% endif %}
+    </tbody>
+    </table>
+    
+{% endblock %}
