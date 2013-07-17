@@ -28,7 +28,7 @@ body {
 /* Downsize the brand/project name a bit */
 .navbar .brand {
   padding: 14px 20px 16px; /* Increase vertical padding to match navbar links */
-  font-size: 16px;
+  font-size: 18px;
   font-weight: bold;
   text-shadow: 0 -1px 0 rgba(0,0,0,.5);
   color:#f27319;
@@ -37,6 +37,7 @@ body {
 /* Navbar links: increase padding for taller navbar */
 .navbar .nav > li > a {
   padding: 15px 20px;
+  font-size:110%;
 }
 
 /* Offset the responsive button for proper vertical alignment */
@@ -98,16 +99,22 @@ body {
 
 /* Center align the text within the three columns below the carousel */
 .marketing .span4 {
-  text-align: center;
+    text-align: center;
     border-radius: 5px;
     margin-bottom:40px;
 }
 .marketing h2 {
-  font-weight: normal;
+    margin-top:10px;
+    margin-bottom:10px;
+    font-weight: normal;
+    font-size:34px;
+    color:#5a5a5a;
 }
 .marketing .span4 p {
-  margin-left: 10px;
-  margin-right: 10px;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-bottom:20px;
+    font-size:14px;
 }
 .marketing-first {
     background:#f9ce50;
@@ -139,9 +146,11 @@ body {
 /* Thin out the marketing headings */
 .featurette-heading {
   font-size: 50px;
+  color:#5a5a5a;
   font-weight: 300;
   line-height: 1;
   letter-spacing: -1px;
+  padding-bottom:10px;
 }
 
 #graphview_instructions {
