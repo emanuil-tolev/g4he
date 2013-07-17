@@ -13,7 +13,6 @@ blueprint = Blueprint('collab', __name__)
 # build an admin page where things can be done
 @blueprint.route('/')
 def index():
-    opts = deepcopy(app.config['JSITE_OPTIONS'])
     q = deepcopy(query_template)
     
     mainorg = None
