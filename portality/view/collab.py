@@ -30,7 +30,7 @@ def index():
             mainorg = v
             qo = deepcopy(query_org_template)
             qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-            q['query']['bool']['must'].append(qo)
+            q['query']['filtered']['query']['bool']['must'].append(qo)
             
         if k.startswith("collab"):
             orgs = v.split(",")
@@ -39,14 +39,14 @@ def index():
                     continue
                 qo = deepcopy(query_org_template)
                 qo['term']["collaboratorOrganisation.canonical.exact"] = org
-                q['query']['bool']['must'].append(qo)
+                q['query']['filtered']['query']['bool']['must'].append(qo)
                 collab_orgs.append(org)
                 
         if k == "funder":
             funder = v
             qf = deepcopy(query_funder_template)
             qf['term']['primaryFunder.name.exact'] = funder
-            q['query']['bool']['must'].append(qf)
+            q['query']['filtered']['query']['bool']['must'].append(qf)
         
         if k == "format":
             result_format = v
@@ -56,28 +56,28 @@ def index():
             if start != "" and start is not None:
                 qs = deepcopy(query_start_template)
                 qs['range']['project.fund.end']['from'] = start
-                q['query']['bool']['must'].append(qs)
+                q['query']['filtered']['query']['bool']['must'].append(qs)
         
         if k == "end":
             end = v
             if end != "" and end is not None:
                 qe = deepcopy(query_end_template)
                 qe['range']['project.fund.start']['to'] = end
-                q['query']['bool']['must'].append(qe)
+                q['query']['filtered']['query']['bool']['must'].append(qe)
                 
         if k == "lower":
             lower = v
             if lower != "" and lower is not None:
                 ql = deepcopy(query_lower_template)
                 ql['range']['project.fund.valuePounds']['from'] = lower
-                q['query']['bool']['must'].append(ql)
+                q['query']['filtered']['query']['bool']['must'].append(ql)
         
         if k == "upper":
             upper = v
             if upper != "" and upper is not None:
                 qu = deepcopy(query_upper_template)
                 qu['range']['project.fund.valuePounds']['to'] = upper
-                q['query']['bool']['must'].append(qu)
+                q['query']['filtered']['query']['bool']['must'].append(qu)
     
     print json.dumps(q)
     
@@ -86,13 +86,21 @@ def index():
     facets = result.get("facets", {})
     count = result.get("hits", {}).get("total", 0)
     
+    # format the numbers in the facets
+    for f in facets.get("collaborators", {}).get("terms"):
+        f['formatted_total'] = "{:,.0f}".format(f['total'])
+    
+    facets['value_stats']['formatted_total'] = "{:,.0f}".format(facets.get("value_stats", {}).get("total", 0))
+    
+    for f in facets.get("funders", {}).get("terms"):
+        f['formatted_total'] = "{:,.0f}".format(f['total'])
+    
     report = []
     for p in projects:
         for co in p.get("collaboratorOrganisation", []):
             # if the collaborating organisation is the main organisation, skip it
             if co.get("canonical") == mainorg:
                 continue
-                
             
             row = {"data" : p}
             row['collaborator'] = co.get("canonical")
@@ -179,11 +187,19 @@ query_upper_template = {
 }
 
 # includes a very large size, so that we can get the data for all collaborations in one hit
-# FIXME: can we improve performance by only retrieving projects with more than one collaboratorOrganisation?
 query_template = {
     "query" : {
-        "bool" : {
-            "must" : []
+        "filtered": {
+            "query" : {
+                "bool" : {
+                    "must" : []
+                }
+            },
+            "filter" : {
+                "script" : {
+                    "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
+                }
+            }
         }
     },
     "size" : 10000,
@@ -195,6 +211,13 @@ query_template = {
                 "size" : 0
             }
         },
+        "funders" : {
+            "terms_stats" : {
+                "key_field" : "primaryFunder.name.exact",
+                "value_field" : "project.fund.valuePounds",
+                "size" : 0
+            }
+        },
         "value_stats" : {
             "statistical" : {
                 "field" : "project.fund.valuePounds"
@@ -202,3 +225,51 @@ query_template = {
         }
     }
 }
+
+
+'''
+{
+    "query" : {
+	"filtered" : {
+      "query": {
+          "bool": {
+              "must": [
+                  {
+                      "term": {
+                          "collaboratorOrganisation.canonical.exact": "Brunel University"
+                      }
+                  }
+              ]
+          }
+      },
+      "filter" : {
+          "script" : {
+              "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
+          }
+      }
+    }
+    }, 
+    "facets": {
+    	"collaborators": {
+        	"terms_stats": {
+            	"value_field": "project.fund.valuePounds", 
+                "key_field": "collaboratorOrganisation.canonical.exact", 
+                "size": 0
+            }
+        },
+        "funders" : {
+            "terms_stats" : {
+                "key_field" : "primaryFunder.name.exact",
+                "value_field" : "project.fund.valuePounds",
+                "size" : 0
+            }
+        },
+        "stat1" : {
+            "statistical" : {
+                "field" : "project.fund.valuePounds"
+            }
+        }
+    }, 
+    "size": 10}
+}
+'''

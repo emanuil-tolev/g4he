@@ -102,9 +102,10 @@ $(document).ready(function() {
 }); 
 </script>
 
-<a href="#" class="reporturl">full url</a>
-
 <h1>Collaboration Report for {{ mainorg }}</h1>
+
+<p>Collaboration reports only show you projects and funding amounts where your organisation has collaborated with one or more other organisations.  They do not show you projects where you were funded alone.</p>
+
 
 {% if collab_orgs|length > 0 %}
     <h2>showing collaborations with 
@@ -119,32 +120,42 @@ $(document).ready(function() {
 <br><br>
 
 <div class="row-fluid">
-    <div class="span12 well">
-        <h3>Report Options</h3>
-        <form method="GET" action="/collab">
-            <!-- hidden fields -->
-            <input type="hidden" name="org" value="{{mainorg}}">
-            <input type="hidden" name="collab" value="{{collab_orgs|join(',')}}">
-            {% if funder %}<input type="hidden" name="funder" value="{{funder}}">{% endif %}
-            
-            <!-- date selector -->
-            <p>Projects active between: <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
-            
-            <!-- project value selector -->
-            <p>Projects with a funded value between: <input type="text" name="lower" value="{% if lower %}{{lower}}{% endif %}"> and <input type="text" name="upper" value="{% if upper %}{{ upper }}{% endif %}"></p>
-            
-            <!-- collaborator facet -->
-            <p>Collaborators: <select name="collab1"> <!-- bit of a fudge, better option required, probably through real JS UI -->
-                <option value="">Add a collaborator ...</option>
-                {% for f in facets.collaborators.terms %}
-                    {% if f.term != mainorg and f.term not in collab_orgs %}
-                        <option value="{{f.term}}">{{f.term}} ({{f.count}} project{% if f.count > 1 %}s{% endif %})</option>
-                    {% endif %}
-                {% endfor %}
-            </select></p>
-            
-            <input type="submit" name="submit_options" value="Update">
-        </form>
+    <div class="span12">
+        <div class="well">
+            <h3>Report Options</h3>
+            <form method="GET" action="/collab">
+                <!-- hidden fields -->
+                <input type="hidden" name="org" value="{{mainorg}}">
+                <input type="hidden" name="collab" value="{{collab_orgs|join(',')}}">
+                
+                <!-- date selector -->
+                <p>Projects active between: <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
+                
+                <!-- project value selector -->
+                <p>Projects with a funded value between: <input type="text" name="lower" value="{% if lower %}{{lower}}{% endif %}"> and <input type="text" name="upper" value="{% if upper %}{{ upper }}{% endif %}"></p>
+                
+                <!-- collaborator facet -->
+                <p>Collaborators: <select name="collab1"> <!-- bit of a fudge, better option required, probably through real JS UI -->
+                    <option value="">Add a collaborator ...</option>
+                    {% for f in facets.collaborators.terms %}
+                        {% if f.term != mainorg and f.term not in collab_orgs %}
+                            <option value="{{f.term}}">{{f.term}}&nbsp;&mdash;&nbsp;{{f.count}} project{% if f.count > 1 %}s{% endif %} totalling £{{ f.formatted_total }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                
+                <!-- funder facet -->
+                Funder: <select name="funder">
+                    <option value="">Select a funder ...</option>
+                    {% for f in facets.funders.terms %}
+                    <option value="{{ f.term }}" {% if f.term == funder %} selected="selected" {%endif%}>{{ f.term }}&nbsp;&mdash;&nbsp;{{f.count}} project{% if f.count > 1 %}s{% endif %} totalling £{{ f.formatted_total }}</option>
+                    {% endfor %}
+                </select>
+                </p>
+                
+                <input type="submit" name="submit_options" value="Update">
+            </form>
+        </div>
     </div>
 </div>
 
@@ -152,7 +163,7 @@ $(document).ready(function() {
     <h2>
         {{ facets.collaborators.terms|length - 1 }} collaborators 
         over {{count}} project{% if count > 1 %}s{% endif %}
-        totalling £{{'%i' % facets.value_stats.total}} in funding
+        totalling £{{ facets.value_stats.formatted_total }} in funding
     </h2>
 {% else %}
     <h2>No results</h2>

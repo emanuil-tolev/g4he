@@ -5,7 +5,7 @@ ADMIN_NAME = "Cottage Labs"
 ADMIN_EMAIL = ""
 
 # service info
-SERVICE_NAME = "Portality"
+SERVICE_NAME = "G4HE"
 SERVICE_TAGLINE = ""
 HOST = "0.0.0.0"
 DEBUG = True
@@ -21,10 +21,10 @@ SHOW_LOGIN = True # if this is false the login link is not shown in the default 
 OFFLINE = False 
 
 # elasticsearch settings
-ELASTIC_SEARCH_HOST = "127.0.0.1:9200"
-ELASTIC_SEARCH_DB = "gtrraw"
-#ELASTIC_SEARCH_HOST = "test.cottagelabs.com:9200"
-#ELASTIC_SEARCH_DB = "g4he2"
+#ELASTIC_SEARCH_HOST = "http://127.0.0.1:9200"
+#ELASTIC_SEARCH_DB = "gtrraw"
+ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200"
+ELASTIC_SEARCH_DB = "g4he2"
 INITIALISE_INDEX = False # whether or not to try creating the index and required index types on startup
 NO_QUERY_VIA_API = ['account'] # list index types that should not be queryable via the API
 PUBLIC_ACCESSIBLE_JSON = True # can not logged in people get JSON versions of pages by querying for them?
