@@ -43,9 +43,10 @@ def index():
                 
         if k == "funder":
             funder = v
-            qf = deepcopy(query_funder_template)
-            qf['term']['primaryFunder.name.exact'] = funder
-            q['query']['filtered']['query']['bool']['must'].append(qf)
+            if funder != "" and funder is not None:
+                qf = deepcopy(query_funder_template)
+                qf['term']['primaryFunder.name.exact'] = funder
+                q['query']['filtered']['query']['bool']['must'].append(qf)
         
         if k == "format":
             result_format = v
