@@ -11,11 +11,10 @@ import json, csv, StringIO
 blueprint = Blueprint('collab', __name__)
 
 # build an admin page where things can be done
-@blueprint.route('/')
-def index():
+@blueprint.route('/<mainorg>/collaboration')
+def index(mainorg=None):
     q = deepcopy(query_template)
-    
-    mainorg = None
+            
     collab_orgs = []
     funder = None
     result_format = "html"
@@ -23,6 +22,11 @@ def index():
     end = None
     lower = None
     upper = None
+    
+    if mainorg is not None:
+        qo = deepcopy(query_org_template)
+        qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
+        q['query']['filtered']['query']['bool']['must'].append(qo)
     
     for k,v in request.values.items():
         if k == "org":
@@ -78,6 +82,8 @@ def index():
                 qu = deepcopy(query_upper_template)
                 qu['range']['project.fund.valuePounds']['to'] = upper
                 q['query']['filtered']['query']['bool']['must'].append(qu)
+
+    print mainorg
     
     print json.dumps(q)
     

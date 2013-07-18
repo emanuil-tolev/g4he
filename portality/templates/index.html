@@ -22,7 +22,7 @@
                 "size":100,
                 "fields":[
                     "leadRo.name.exact",
-                    "collaboratorOrganisation.organisation.name.exact",
+                    "collaboratorOrganisation.canonical.exact",
                     "primaryFunder.name.exact",
                     "projectPartner.name.exact",
                     "collaboratorPerson.person.surname.exact",
@@ -36,7 +36,7 @@
                 ],
                 "facets":{
                     "lead organisations": {"term":{"field":"leadRo.name.exact","suggest": true}},
-                    "collaborators": {"term":{'field':'collaboratorOrganisation.organisation.name.exact', "node": true, "suggest": true}},
+                    "collaborators": {"term":{'field':'collaboratorOrganisation.canonical.exact', "node": true, "suggest": true}},
                     "funders": {"term":{'field':'primaryFunder.name.exact', "node": true, "suggest": true}},
                     "project partners": {"term":{"field":"projectPartner.name.exact","node": true, "suggest": true}},
                     "people": {"term":{"field":"collaboratorPerson.person.surname.exact","node": true, "suggest": true}},
@@ -64,7 +64,7 @@
                 },
                 "fields":[
                     "leadRo.name.exact",
-                    "collaboratorOrganisation.organisation.name.exact",
+                    "collaboratorOrganisation.canonical.exact",
                     "primaryFunder.name.exact",
                     "projectPartner.name.exact",
                     "collaboratorPerson.person.surname.exact",
@@ -87,61 +87,15 @@
                 return "";
             },
             "uibindings": function() {
-                // attach select2 functionality to the whoareyou input
-                $('#whoareyou').select2({
-                    placeholder: "Who are you?",
-                    minimumInputLength: 3,
-                    ajax: { // instead of writing the function to execute the request we use Select2's convenient helper
-                        url: target,
-                        dataType: 'JSON',
-                        data: function (term) {
-                            return {
-                                "source": JSON.stringify({
-                                    "query": {
-                                        "query_string": {
-                                            "default_field": 'collaboratorOrganisation.organisation.name',
-                                            "query": "*" + term + "*"
-                                        }
-                                    },
-                                    "size": 0,
-                                    "facets": {
-                                        "tags":{
-                                            "terms": {
-                                                "field": 'collaboratorOrganisation.organisation.name.exact',
-                                                "order": "count",
-                                                "size": 20
-                                            },
-                                            "facet_filter": {
-                                                "query": {
-                                                    "query_string": {
-                                                        "query": "*" + term + "*"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                })
-                            };
-                        },
-                        results: function (data) { // parse the results into the format expected by Select2.
-                            var results = [];
-                            for ( var i = 0; i < data.facets.tags.terms.length; i++ ) {
-                                var name = data.facets.tags.terms[i].term;
-                                var check = $('.select2-focused').val().toLowerCase();
-                                if (name.toLowerCase().indexOf(check) != -1) {
-                                    results.push({"id": name});
-                                }
-                            }
-                            return {results: results};
-                        }
-                    },
-                    formatResult: function(facet) {
-                        return '<div style="font-size:24px;padding:20px;">' + facet.id + '</div>';
-                    },
-                    formatSelection: function(facet) {
-                        return facet.id;
-                    },
-                    dropdownCssClass: "explorer-dropdown"
+                var orgs = {{orgs|safe}};
+                $('#whoareyou').autocomplete({
+                    'source':orgs,
+                    'minLength':0,  
+                    'select': function( event, ui ) {
+                        $("#whoareyou").val( ui.item.value );
+                        $("#orgid").val( ui.item.value ).trigger('change');
+                        return false;
+                    }
                 });
                 $('.explorer-dropdown').parent().css({
                     "width":"100%",
@@ -149,31 +103,28 @@
                     "width": "100%",
                     "margin":"12px 0 12px 0",
                 });
-                $('#whoareyou').bind('change',$('#whoareyou').graphview.options.executequery);
+                $('#orgid').bind('change',$('#explorer').graphview.options.executequery);
             },
             "executequery": function() {
-                $('#whoareyou').val().length ? $('#explorer').html('<img class="graphview-loading img thumbnail" src="loading.gif">') : false;
+                $('#orgid').val().length ? $('#explorer').html('<img class="graphview-loading img thumbnail" src="loading.gif">') : false;
                 var qry = {
                     "query": {
                         "term": {
-                            "collaboratorOrganisation.organisation.name.exact": $('#whoareyou').val()
+                            "collaboratorOrganisation.canonical.exact": $('#orgid').val()
                         }
                     },
-                    "size": 10000,
-                    "fields": ['project.fund.valuePounds'],
+                    "size": 0,
                     "facets": {
                         "collaborators":{
-                            "terms": {
-                                "field": 'collaboratorOrganisation.organisation.name.exact',
-                                "order": "count",
-                                "size": 100
-                            },
-                            "facet_filter": {
-                                "query": {
-                                    "term": {
-                                        "collaboratorOrganisation.organisation.name.exact": $('#whoareyou').val()
-                                    }
-                                }
+                            "terms_stats" : {
+                                "key_field" : "collaboratorOrganisation.canonical.exact",
+                                "value_field" : "project.fund.valuePounds",
+                                "size" : 0
+                            }
+                        },
+                        "value_stats" : {
+                            "statistical" : {
+                                "field" : "project.fund.valuePounds"
                             }
                         }
                     }
@@ -183,30 +134,29 @@
                     contentType: "application/json; charset=utf-8",
                     type: 'GET',
                     dataType: 'JSONP',
-                    success: $('#whoareyou').graphview.options.showresults
+                    success: $('#explorer').graphview.options.showresults
                 };
                 $.ajax(ajaxopts);
             },
             "showresults": function(data) {
                 // put the response data in the response option
-                data ? $('#whoareyou').graphview.options.response = data : false;
-                var org = $('#whoareyou').val();
+                data ? $('#explorer').graphview.options.response = data : false;
+                var org = $('#orgid').val();
 
                 var logo = org.toLowerCase().replace(/\s/g,'_').replace("'",'').replace('university_','').replace('_university','').replace('_of','').replace('of_','').replace('_the','').replace('_the','').replace('_and','').replace('and_','').replace('_.','.') + '.png';
                 
                 var img = '<img class="img thumbnail" src="/static/logos/' + logo + '" style="width:487px;margin-left:30px;">';
                 
-                var total = 0;
                 for ( var i=0; i < data.hits.hits.length; i++ ) {
                     total += data.hits.hits[i].fields['project.fund.valuePounds'];
                 }
                 
-                var info = '<p class="lead">We know of ' + data.facets.collaborators.total + ' collaborators</p>';
-                info += '<p class="lead">Across ' + data.hits.total + ' projects</p>';
-                info += '<p class="lead">Which are worth a total of £' + total + '</p>';
+                var info = '<p class="lead">We have found ' + data.hits.total + ' projects involving<br>' + org + '</p>';
+                info += '<p class="lead">Which are worth a total of £' + data.facets.value_stats.total + '</p>';
+                info += '<p class="lead">And which involve ' + (data.facets.collaborators.terms.length - 1) + ' collaborators</p>';
                 
-                info += '<p><a class="btn showvis" data-visthis="' + org + '" href="#">AVAILABLE NOW: visualise your collaboration network</a></p>';
-                info += '<p><br><a href="#">Coming soon: view all your collaborations and report on their values by various facets.</a></p>';
+                info += '<p><br><a style="width:400px;" class="btn btn-info" href="/organisation/' + org + '/collaboration">Build a report and discover the value of your collaborations</a></p>';
+                info += '<p><a style="width:400px;" class="btn showvis" data-visthis="' + org + '" href="#">Visualise and explore your collaboration network</a></p>';
                 
                 if ( org.length ) {
                     $('#explorer').html(img);
@@ -220,17 +170,15 @@
             // reset carousel to network view
             $('#myCarousel').carousel(0);
             $('#myCarousel').carousel('pause');
-            // get current search string data
-            var selectdata = $('.query_string').select2("data");
             // add the selected org from previous screen
             var searchval = $(this).attr('data-visthis');
-            selectdata.push({
-                "id": "collaboratorOrganisation.organisation.name.exact__________" + searchval, 
-                "text": searchval
-            });
+            var selectdata = [{
+                "text": searchval,
+                "id": "collaboratorOrganisation.canonical.exact__________" + searchval
+            }];
             $('.query_string').select2("data",selectdata);
             // check the collaborators box
-            $('[data-field="collaboratorOrganisation.organisation.name.exact"]').attr('checked','checked');
+            $('[data-field="collaboratorOrganisation.canonical.exact"]').attr('checked','checked');
             // trigger a search
             $('.query_string').trigger('change');
             // show some instructions
@@ -298,9 +246,8 @@
             <div class="container">
                 <div class="row">
                     <div class="span6">
-                        <div class="hero-unit">
-                            <input type="hidden" name="whoareyou" class="whoareyou" id="whoareyou" placeholder=" Who are you?">
-                        </div>
+                        <input type="hidden" name="orgid" id="orgid">
+                        <input type="text" name="whoareyou" id="whoareyou">
                         <div class="well" id="thisiswhoyouare" style="height:258px;">
                             <p class="lead">Search for your organisation name above.</p>
                             <p class="lead">Find your organisation and we will have a quick look to see 
