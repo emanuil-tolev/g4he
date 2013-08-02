@@ -10,9 +10,60 @@ import json, csv, StringIO
 
 blueprint = Blueprint('collab', __name__)
 
-# build an admin page where things can be done
+# benchmarking report
+#####################################################################
+
+@blueprint.route("/<mainorg>/benchmarking", methods=["GET", "POST"])
+def benchmarking(mainorg=None):
+    if request.method == "GET":
+        return GET_benchmarking(mainorg)
+    elif request.method == "POST":
+        return POST_benchmarking(mainorg)
+
+def GET_benchmarking(mainorg):
+    result_format = "html"
+    
+    if result_format == "html":
+        return render_template('collab/bench.html', mainorg=mainorg)
+
+def POST_benchmarking(mainorg):
+    q = deepcopy(b_query_template)
+    j = request.json
+    
+    qo = deepcopy(query_org_template)
+    qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
+    q['query']['bool']['must'].append(qo)
+    
+    result = models.Record.query(q=q)
+    
+    resp = make_response(json.dumps(result))
+    resp.mimetype = "application/json"
+    return resp
+
+b_query_template = {
+    "query" : {
+        "bool" : {
+        	"must" : []
+        }
+    },
+    "size" : 0,
+    "facets" : {
+        "award_values" : {
+            "date_histogram" : {
+                "key_field" : "project.fund.start",
+                "value_field" : "project.fund.valuePounds",
+                "interval" : "quarter"
+            }
+        }
+    }
+}
+
+
+# collaboration report
+######################################################################
+
 @blueprint.route('/<mainorg>/collaboration')
-def index(mainorg=None):
+def collaboration(mainorg=None):
     q = deepcopy(query_template)
             
     collab_orgs = []

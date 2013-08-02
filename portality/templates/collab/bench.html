@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<script type="text/javascript">
+
+$(document).ready(function() {
+    
+    function generateReport(data) {
+        var table = "<table id='report_table'><thead><tr><th>Date</th><th>Number of Projects</th><th>Award Value</th></tr></thead><tbody>"
+        var entries = data['facets']['award_values']['entries']
+        for (var i = 0; i < entries.length; i++) {
+            table += "<tr>"
+            
+            var d = new Date(entries[i].time)
+            table += "<td>" + $.datepicker.formatDate("M y", d) + "</td>"
+            
+            var count = entries[i].count
+            table += "<td>" + count + "</td>"
+            
+            var value = entries[i].total
+            table += "<td>" + value + "</td>"
+            
+            table += "</tr>"
+        }
+        table += "</tbody></table>"
+        $("#report").html(table)
+        $("#report_table").tablesorter()
+    }
+    
+    $("#generate").click(function() {
+    
+        var obj = {};
+        obj["mainorg"] = "{{mainorg}}";
+        obj["type"] = "award_value";
+        obj["granularity"] = "quarter"
+            
+        $.ajax({
+            type: "POST",
+            url: "/organisation/{{mainorg}}/benchmarking",
+            contentType: "application/json",
+            dataType: "json",
+            data: JSON.stringify(obj),
+            success : generateReport
+        })
+    }); 
+    
+});
+
+</script>
+
+<h1>Benchmarking Report for {{ mainorg }}</h1>
+
+<button id="generate">Generate!</button>
+
+<div id="report"></div>
+
+{% endblock %}
