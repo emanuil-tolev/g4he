@@ -10,6 +10,34 @@ import json, csv, StringIO
 
 blueprint = Blueprint('collab', __name__)
 
+# base organisation api (IGNORE FOR NOW)
+#####################################################################
+
+@blueprint.route("/")
+def organisation():
+    q = request.values.get("q")
+    query = deepcopy(org_search_query)
+    query["facets"]["orgs"]["terms"]["script"] = "term.toLowerCase() contains '" + q.lower() + "'"
+    result = models.Record.query(q=query)
+    terms = result.get("facets", {}).get("orgs", {}).get("terms")
+    return make_response(json.dumps(terms))
+
+org_search_query = {
+    "query" : {
+    	"match_all" : {}
+    },
+    "size" : 0,
+    "facets" : {
+        "orgs" : {
+            "terms" : {
+                "field" : "collaboratorOrganisation.canonical.exact",
+                "size" : 25,
+                "script" : "term.toLowerCase() contains '<q>'"
+            }
+        }
+    }
+}
+
 # benchmarking report
 #####################################################################
 
@@ -29,14 +57,20 @@ def GET_benchmarking(mainorg):
 def POST_benchmarking(mainorg):
     q = deepcopy(b_query_template)
     j = request.json
+    benchmark = {}
     
     qo = deepcopy(query_org_template)
     qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
     q['query']['bool']['must'].append(qo)
+    main_org_result = models.Record.query(q=q)
+    benchmark[mainorg] = main_org_result.get("facets", {}).get("award_values", {}).get("entries")
     
-    result = models.Record.query(q=q)
+    for o in j.get("compare_org", []):
+        q['query']['bool']['must'][0]['term']["collaboratorOrganisation.canonical.exact"] = o
+        compare_result = models.Record.query(q=q)
+        benchmark[o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
     
-    resp = make_response(json.dumps(result))
+    resp = make_response(json.dumps(benchmark))
     resp.mimetype = "application/json"
     return resp
 
@@ -57,6 +91,7 @@ b_query_template = {
         }
     }
 }
+
 
 
 # collaboration report
