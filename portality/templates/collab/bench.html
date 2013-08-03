@@ -6,8 +6,7 @@
 
 $(document).ready(function() {
     
-    function generateReport(data) {
-        
+    function _getRowData(data, field) {
         // get a full list of the dates and process the rows for each organisation
         var dates = []
         var orgs = []
@@ -20,77 +19,143 @@ $(document).ready(function() {
                 if ($.inArray(p.time, dates) === -1) {
                     dates.push(p.time)
                 }
-                org_rows[p.time] = [p.count, p.total]
+                org_rows[p.time] = p[field]
             }
             row_sets[org] = org_rows
         }
         
         // for each date (sorted) create a row with the relevant data from each org
-        dates.sort()
+        dates.sort(function(a,b){return a - b})
         orgs.sort()
         rows = []
         for (var i = 0; i < dates.length; i++) {
             row = []
-            row.push($.datepicker.formatDate("M yy", new Date(dates[i])))
+            row.push($.datepicker.formatDate("mm-yy", new Date(dates[i])))
             for (var j = 0; j < orgs.length; j++) {
                 if (dates[i] in row_sets[orgs[j]]) {
-                    row.push(row_sets[orgs[j]][dates[i]][0])
-                    row.push(row_sets[orgs[j]][dates[i]][1])
+                    row.push(row_sets[orgs[j]][dates[i]])
                 }
                 else {
-                    row.push("-")
-                    row.push("-")
+                    row.push(0)
                 }
             }
             rows.push(row)
         }
         
+        return {
+            "rows" : rows,
+            "dates" : dates,
+            "orgs" : orgs
+        }
+    }
+    
+    function _getTable(orgs, rows, data_formatter) {
         var table = "<table id='report_table'><thead><th>Date</th>"
         for (var i = 0; i < orgs.length; i++) {
-            table += "<th>" + orgs[i] + ": Project Count</th>"
-            table += "<th>" + orgs[i] + ": Total Awarded</th>"
+            table += "<th>" + orgs[i] + "</th>"
         }
         table += "</thead><tbody>"
         for (var i = 0; i < rows.length; i++) {
             table += "<tr>"
             for (var j = 0; j < rows[i].length; j++) {
-                table += "<td>" + rows[i][j] + "</td>"
+                var val = data_formatter && j > 0 ? data_formatter(rows[i][j]) : rows[i][j] 
+                table += "<td>" + val + "</td>"
             }
             table += "</tr>"
         }
         table += "</tbody></table>"
-        $("#report").html(table)
-        $("#report_table").tablesorter()
-        
-        
-        //var table = "<table id='report_table'><thead><tr><th>Date</th><th>Number of Projects</th><th>Award Value</th></tr></thead><tbody>"
-        //var entries = data['facets']['award_values']['entries']
-        //for (var i = 0; i < entries.length; i++) {
-        //    table += "<tr>"
-        //    
-        //    var d = new Date(entries[i].time)
-        //    table += "<td>" + $.datepicker.formatDate("M y", d) + "</td>"
-        //    
-        //    var count = entries[i].count
-        //    table += "<td>" + count + "</td>"
-        //    
-        //    var value = entries[i].total
-        //    table += "<td>" + value + "</td>"
-        //    
-        //    table += "</tr>"
-        //}
-        //table += "</tbody></table>"
-        //$("#report").html(table)
-        //$("#report_table").tablesorter()
+        return table;
     }
+    
+    function numProjectsReport(benchmark) {
+        // get the report data out of the benchmark response
+        var data = benchmark["report"];
+        
+        // calculate all the row data
+        var row_data = _getRowData(data, "count")
+        
+        // generate the HTML table
+        var table = _getTable(row_data.orgs, row_data.rows)
+        
+        var header = "<h2>comparing number of projects with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
+        
+        return header + table;
+    }
+    
+    function awardValueReport(benchmark) {
+        // get the report data out of the benchmark response
+        var data = benchmark["report"];
+        
+        // calculate all the row data
+        var row_data = _getRowData(data, "total")
+        
+        // generate the HTML table
+        var table = _getTable(row_data.orgs, row_data.rows, function(data) {
+            return "£" + data.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        })
+        
+        var header = "<h2>comparing award values with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
+        
+        return header + table;
+    }
+    
+    var reportFunctions = {
+        "num_projects" : numProjectsReport,
+        "award_value" : awardValueReport
+    }
+    
+    function generateReport(benchmark) {
+        
+        // find the report function and call it
+        var fn = reportFunctions[benchmark["parameters"]["type"]]
+        if (fn) {
+            var frag = fn(benchmark)
+            $("#report").html(frag)
+            $("#report_table").tablesorter()
+            $("#alternatives").show()
+        }
+    }
+    
+    $("#num_projects").change(function() {
+        if (!$(this).attr("checked")) { return }
+        $("#range_intro").html("For projects that start between")
+    });
+    
+    $("#award_value").change(function() {
+        if (!$(this).attr("checked")) { return }
+        $("#range_intro").html("For projects that start between")
+    });
+    
+    $("#publications").change(function() {
+        if (!$(this).attr("checked")) { return }
+        $("#range_intro").html("For publications published between")
+    });
+    
+    $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
     
     $("#generate").click(function() {
     
         var obj = {};
+        
+        // get the standard report parameters
         obj["mainorg"] = "{{mainorg}}";
-        obj["type"] = "award_value";
-        obj["granularity"] = "quarter"
-        obj["compare_org"] = [$("#compare_to").val()]
+        obj["type"] = $("input[name=report_type]:checked").val();
+        obj["granularity"] = $("select[name=granularity]").val();
+        var start = $("input[name=start]").val();
+        if (start && start !== "") {
+            obj["start"] = start;
+        }
+        var end = $("input[name=end]").val();
+        if (end && end!== "") {
+            obj["end"] = end;
+        }
+        
+        // get the comparison information
+        // FIXME: this will all get replaced when we do a proper treatment of comparison selection
+        var ct = $("#compare_to").val();
+        if (ct && ct !== "") {
+            obj["compare_org"] = [ct]
+        }
         
         $.ajax({
             type: "POST",
@@ -122,6 +187,8 @@ $(document).ready(function() {
         }
     });
     
+    $("#alternatives").hide()
+    
 });
 
 </script>
@@ -129,11 +196,42 @@ $(document).ready(function() {
 <h1>Benchmarking Report for {{ mainorg }}</h1>
 
 <div class="row-fluid">
+    <div class="span12"><div class="well">
     
-<input type="text" name="compare_to" id="compare_to">
+        <h3>Report Options</h3>
+        
+        <p>Report on: <input type="radio" name="report_type" value="num_projects" checked="checked" id="num_projects">&nbsp;number of projects&nbsp;&nbsp;&nbsp;&nbsp;
+        <input type="radio" name="report_type" value="award_value" id="award_value">&nbsp;total amount awarded&nbsp;&nbsp;&nbsp;&nbsp;
+        <input type="radio" name="report_type" value="publications" id="publications">&nbsp;number of publications</p>
+        
+        <p><span id="range_intro">For projects that start between</span> <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
+        
+        <p>With granularity
+        <select name="granularity">
+            <option value="month">monthly</option>
+            <option value="quarter" selected="selected">quarterly</option>
+            <option value="year">yearly</option>
+        </select></p>
+    
+    </div></div>
+</div>
 
-<button id="generate">Generate!</button>
+<div class="row-fluid">
+    <div class="span12"><div class="well">
+        <h3>Comparison Options</h3>
+        
+        <div id="compare_to_org">
+            <input type="text" name="compare_to" id="compare_to">
+        </div>
+        
+        <!-- can have other compare_to blocks here for other kinds of comparison -->
+    </div></div>
+</div>
 
+<button id="generate" class="btn btn-primary">Generate the report &gt;</button>
+
+<div class="row-fluid" id="alternatives">
+    <div class="span12" style="text-align: right"><a href="#" class="reporturl" data-format="csv">download as csv</a></div>
 </div>
 
 <div id="report"></div>

@@ -57,18 +57,18 @@ def GET_benchmarking(mainorg):
 def POST_benchmarking(mainorg):
     q = deepcopy(b_query_template)
     j = request.json
-    benchmark = {}
+    benchmark = {"parameters" : j, "report" : {}}
     
     qo = deepcopy(query_org_template)
     qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
     q['query']['bool']['must'].append(qo)
     main_org_result = models.Record.query(q=q)
-    benchmark[mainorg] = main_org_result.get("facets", {}).get("award_values", {}).get("entries")
+    benchmark["report"][mainorg] = main_org_result.get("facets", {}).get("award_values", {}).get("entries")
     
     for o in j.get("compare_org", []):
         q['query']['bool']['must'][0]['term']["collaboratorOrganisation.canonical.exact"] = o
         compare_result = models.Record.query(q=q)
-        benchmark[o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
+        benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
     
     resp = make_response(json.dumps(benchmark))
     resp.mimetype = "application/json"
