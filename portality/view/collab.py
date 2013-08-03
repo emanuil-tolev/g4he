@@ -59,12 +59,29 @@ def POST_benchmarking(mainorg):
     j = request.json
     benchmark = {"parameters" : j, "report" : {}}
     
+    # build in the standard parts of the query
+    if j.get("start", "") != "":
+        qs = deepcopy(b_query_start_template)
+        qs['range']['project.fund.start']['from'] = j.get("start")
+        q['query']['bool']['must'].append(qs)
+    
+    if j.get("end", "") != "":
+        qe = deepcopy(b_query_end_template)
+        qe['range']['project.fund.start']['to'] = j.get("end")
+        q['query']['bool']['must'].append(qe)
+    
+    if j.get("granularity", "") != "":
+        if j.get("granularity") in ["month", "quarter", "year"]:
+            q['facets']['award_values']['date_histogram']['interval'] = j.get("granularity")
+    
+    # do the main organisation query
     qo = deepcopy(query_org_template)
     qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
     q['query']['bool']['must'].append(qo)
     main_org_result = models.Record.query(q=q)
     benchmark["report"][mainorg] = main_org_result.get("facets", {}).get("award_values", {}).get("entries")
     
+    # for each of the additional orgs, do the same query with the different org
     for o in j.get("compare_org", []):
         q['query']['bool']['must'][0]['term']["collaboratorOrganisation.canonical.exact"] = o
         compare_result = models.Record.query(q=q)
@@ -92,6 +109,21 @@ b_query_template = {
     }
 }
 
+b_query_end_template = {
+    "range" : {
+        "project.fund.start" : {
+            "to" : "<end of range>"
+        }
+    }
+}
+
+b_query_start_template = {
+    "range" : {
+        "project.fund.start" : {
+            "from" : "<start of range>"
+        }
+    }
+}
 
 
 # collaboration report

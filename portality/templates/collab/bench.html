@@ -30,7 +30,7 @@ $(document).ready(function() {
         rows = []
         for (var i = 0; i < dates.length; i++) {
             row = []
-            row.push($.datepicker.formatDate("mm-yy", new Date(dates[i])))
+            row.push(dates[i])
             for (var j = 0; j < orgs.length; j++) {
                 if (dates[i] in row_sets[orgs[j]]) {
                     row.push(row_sets[orgs[j]][dates[i]])
@@ -49,7 +49,11 @@ $(document).ready(function() {
         }
     }
     
-    function _getTable(orgs, rows, data_formatter) {
+    function _getTable(params) {
+        var orgs = params.orgs
+        var rows = params.rows
+        var value_formatter = params.value_formatter
+        var date_formatter = params.date_formatter
         var table = "<table id='report_table'><thead><th>Date</th>"
         for (var i = 0; i < orgs.length; i++) {
             table += "<th>" + orgs[i] + "</th>"
@@ -58,7 +62,13 @@ $(document).ready(function() {
         for (var i = 0; i < rows.length; i++) {
             table += "<tr>"
             for (var j = 0; j < rows[i].length; j++) {
-                var val = data_formatter && j > 0 ? data_formatter(rows[i][j]) : rows[i][j] 
+                var val = ""
+                if (j === 0) { // this is the date field
+                    val = date_formatter ? date_formatter(rows[i][j]) : rows[i][j]
+                }
+                else {
+                    val = value_formatter && j > 0 ? value_formatter(rows[i][j]) : rows[i][j]
+                }
                 table += "<td>" + val + "</td>"
             }
             table += "</tr>"
@@ -75,7 +85,11 @@ $(document).ready(function() {
         var row_data = _getRowData(data, "count")
         
         // generate the HTML table
-        var table = _getTable(row_data.orgs, row_data.rows)
+        var table = _getTable({
+                orgs: row_data.orgs, 
+                rows: row_data.rows,
+                date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
+            })
         
         var header = "<h2>comparing number of projects with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
         
@@ -90,9 +104,14 @@ $(document).ready(function() {
         var row_data = _getRowData(data, "total")
         
         // generate the HTML table
-        var table = _getTable(row_data.orgs, row_data.rows, function(data) {
-            return "£" + data.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        })
+        var table = _getTable({
+                orgs: row_data.orgs,
+                rows: row_data.rows, 
+                value_formatter: function(data) {
+                    return "£" + data.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                },
+                date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
+            })
         
         var header = "<h2>comparing award values with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
         
@@ -102,6 +121,18 @@ $(document).ready(function() {
     var reportFunctions = {
         "num_projects" : numProjectsReport,
         "award_value" : awardValueReport
+    }
+    
+    var dateFunctions = {
+        "month" : function(millis) { return $.datepicker.formatDate("mm-yy", new Date(millis)) },
+        "quarter" : function(millis) {
+                        var d = new Date(millis)
+                        var year = d.getFullYear()
+                        var month = d.getMonth()
+                        var q = month < 3 ? "Q1" : month < 6 ? "Q2" : month < 9 ? "Q3" : "Q4" // month is 0 indexed
+                        return q + " " + year
+                    },
+        "year" : function(millis) { return $.datepicker.formatDate("yy", new Date(millis)) }
     }
     
     function generateReport(benchmark) {
