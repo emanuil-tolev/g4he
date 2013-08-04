@@ -6,6 +6,10 @@
 
 $(document).ready(function() {
     
+    function randomID() {
+        return Math.floor((Math.random()*1000000));
+    }
+    
     function _getRowData(params) {
         var data = params.data ? params.data : []
         var field = params.value_field ? params.value_field : "count"
@@ -205,12 +209,30 @@ $(document).ready(function() {
             obj["end"] = end;
         }
         
-        // get the comparison information
+        // get the comparison information for organisations
         obj["compare_org"] = []
+        if ($("input[name=main_org]").is(":checked")) {
+            obj["compare_org"].push("{{mainorg}}")
+        }
         $("span.org_record").each(function(i, e) {
             var org = $(e).attr("data-org")
             obj["compare_org"].push(org)
         })
+        
+        // FIXME: currently only deals with a single group of people
+        // get the comparison information for groups
+        var gname = $("input[name=group_name]").val()
+        obj["compare_groups"] = {}
+        if (gname && gname !== "")
+        {
+            obj["compare_groups"][gname]  = []
+            $("span.pers_record").each(function(i, e) {
+                var pers = $(e).attr("data-pers")
+                obj["compare_groups"][gname].push(pers)
+            })
+        }
+        
+        alert(JSON.stringify(obj))
         
         $.ajax({
             type: "POST",
@@ -244,14 +266,31 @@ $(document).ready(function() {
     
     $("#add_compare_org").click(function() {
         var org = $("#compare_to").val()
-        var id = org.replace(/ /g,'');
+        var id = randomID()
         var record = "<span class='org_record' style='padding-right: 5px;' id='" + id + "' data-org='" + org + "'>" + 
                     org + "&nbsp;(<a href='#' class='remove_org' data-id='" + id + "'>x</a>)</span>"
         $("#comparing_to_list").append(record)
         
         // now re-bind the click function to the remove_org stuff
         $(".remove_org").unbind("click")
-        $(".remove_org").click(function () {
+        $(".remove_org").click(function (event) {
+            event.preventDefault()
+            var id = $(this).attr("data-id")
+            $("span[id=" + id + "]").remove()
+        })
+    });
+    
+    $("#add_person").click(function() {
+        var pers = $("#select_person").val()
+        var id = randomID()
+        var record = "<span class='pers_record' style='padding-right: 5px;' id='" + id + "' data-pers='" + pers + "'>" + 
+                    pers + "&nbsp;(<a href='#' class='remove_pers' data-id='" + id + "'>x</a>)</span>"
+        $("#comparing_to_group_list").append(record)
+        
+        // now re-bind the click function to the remove_org stuff
+        $(".remove_pers").unbind("click")
+        $(".remove_pers").click(function (event) {
+            event.preventDefault()
             var id = $(this).attr("data-id")
             $("span[id=" + id + "]").remove()
         })
@@ -259,6 +298,47 @@ $(document).ready(function() {
     
     $("#alternatives").hide()
     
+    $("#compare_to_group").hide()
+    $("#choose_another").hide()
+    $("#org_compare").hide()
+    
+    $("#create_group_link").click(function(event) {
+        event.preventDefault();
+        $("#create_group").hide()
+        $("#compare_to_group").show()
+        $("#choose_another").show()
+    })
+    
+    $("#org_compare_link").click(function(event) {
+        event.preventDefault();
+        $("#allow_org_compare").hide()
+        $("#org_compare").show()
+    })
+    
+    $("#select_person").select2({
+        minimumInputLength: 3,
+        placeholder: "select a person for this group",
+        query: function (query) {
+            var internal = $("input[name=internal]").is(":checked")
+            var url = "/organisation/person"
+            if (internal) {
+                url = "/organisation/{{mainorg}}/person"
+            }
+            $.ajax({
+                type : "GET",
+                data : {q : query.term},
+                dataType: "json",
+                url: url,
+                success: function(resp) {
+                    var data = {results: []}
+                    for (var i = 0; i < resp.length; i++) {
+                        data.results.push({id : resp[i].term, text: resp[i].term})
+                    }
+                    query.callback(data);
+                }
+            })
+        }
+    });
 });
 
 </script>
@@ -290,10 +370,14 @@ $(document).ready(function() {
     <div class="span12"><div class="well">
         <h3>Comparison Options</h3>
         
-        <div class="row-fluid">
+        <p><input type="checkbox" value="main_org" name="main_org" checked="checked">&nbsp;Add {{mainorg}} as a whole to the report</p>
+        
+        <div class="row-fluid" id="allow_org_compare" style="padding: 10px 0px 10px 0px"><a href="#" id="org_compare_link">compare other organisations</a></div>
+        
+        <div class="row-fluid" id="org_compare" style="padding: 10px 0px 10px 0px">
             <div class="span5" id="compare_to_org">
                 <h4>Choose organisations to compare to</h4>
-                <input type="text" name="compare_to" id="compare_to">
+                <input type="text" name="compare_to" id="compare_to" style="width: 80%">
                 <button id="add_compare_org" class="btn btn-success">Add &gt;&gt;</button>
             </div>
             <div class="span7" id="comparing_to_list">
@@ -301,7 +385,25 @@ $(document).ready(function() {
             </div>
         </div>
         
-        <!-- can have other compare_to blocks here for other kinds of comparison -->
+        <div class="row-fluid" id="create_group" style="padding: 10px 0px 10px 0px"><a href="#" id="create_group_link">create a group of people to benchmark</a></div>
+        
+        <div class="row-fluid" id="compare_to_group" style="padding: 10px 0px 10px 0px; border-top: 1px solid #cccccc">
+            <div class="span5" id="compare_to_group_form">
+                <h4>Give this group a name</h4>
+                <input type="text" name="group_name" placeholder="Group name (e.g. {{mainorg}} Archaeology Group)" style="width: 100%"><br>
+                <h4>Choose people to group</h4>
+                <!-- FIXME: omitted until we can get the index into the right shape for this kind of query
+                <p><input type="checkbox" value="internal" name="internal">&nbsp;Restrict to people affiliated with {{mainorg}}</p> -->
+                <input type="text" name="select_person" id="select_person" style="width: 80%">
+                <button id="add_person" class="btn btn-success">Add &gt;&gt;</button>
+                
+            </div>
+            <div class="span7" id="comparing_to_group_list">
+                <h4>Selected people</h4>
+            </div>
+        </div>
+        
+        <div class="row-fluid" id="choose_another" style="padding: 10px 0px 10px 0px"><a href="#">create another group of people to benchmark</a></div>
     </div></div>
 </div>
 

@@ -10,7 +10,7 @@ import json, csv, StringIO, time
 
 blueprint = Blueprint('collab', __name__)
 
-# base organisation api (IGNORE FOR NOW)
+# base organisation api
 #####################################################################
 
 @blueprint.route("/")
@@ -31,6 +31,34 @@ org_search_query = {
         "orgs" : {
             "terms" : {
                 "field" : "collaboratorOrganisation.canonical.exact",
+                "size" : 25,
+                "script" : "term.toLowerCase() contains '<q>'"
+            }
+        }
+    }
+}
+
+# FIXME: mainorg is currently ignored here, as there is no way to constrain the list of people
+# to the supplied organisation with the index in its current form
+@blueprint.route("/person")
+@blueprint.route("/<mainorg>/person")
+def person(mainorg=None):
+    q = request.values.get("q")
+    query = deepcopy(person_search_query)
+    query["facets"]["people"]["terms"]["script"] = "term.toLowerCase() contains '" + q.lower() + "'"
+    result = models.Record.query(q=query)
+    terms = result.get("facets", {}).get("people", {}).get("terms")
+    return make_response(json.dumps(terms))
+
+person_search_query = {
+    "query" : {
+    	"match_all" : {}
+    },
+    "size" : 0,
+    "facets" : {
+        "people" : {
+            "terms" : {
+                "field" : "collaboratorPerson.canonical.exact",
                 "size" : 25,
                 "script" : "term.toLowerCase() contains '<q>'"
             }
@@ -87,14 +115,27 @@ def _publicationsReport(mainorg, j, benchmark):
     
     lower_time = -1 if j.get("start", "") == "" else int(time.mktime(time.strptime(j.get("start"), "%Y-%m-%d"))) * 1000
     upper_time = -1 if j.get("end", "") == "" else int(time.mktime(time.strptime(j.get("end"), "%Y-%m-%d"))) * 1000
-    print j.get("start"), j.get("end")
-    print lower_time, upper_time
     
-    orgs = [mainorg] + j.get("compare_org", [])
-    
-    for org in orgs:
+    for org in j.get("compare_org", []):
         _publicationsBenchmarkOrg(q, org, lower_time, upper_time, benchmark)
     
+    # for each of the groups of people do the group query
+    for gname, people in j.get("compare_groups", {}).iteritems():
+        _publicationsBenchmarkGroup(q, gname, people, lower_time, upper_time, benchmark)
+
+def _publicationsBenchmarkGroup(base_query, gname, people, lower_time, upper_time, benchmark):
+    query = deepcopy(base_query)
+    qp = deepcopy(b_group_template)
+    
+    for person in people:
+        qp["terms"]["collaboratorPerson.canonical.exact"].append(person)
+    query["query"]["bool"]["must"].append(qp)
+    
+    result = models.Record.query(q=query)
+    entries = result.get("facets", {}).get("publication_dates", {}).get("entries")
+    
+    _trimTimesAndAdd(gname, entries, lower_time, upper_time, benchmark)
+
 def _publicationsBenchmarkOrg(base_query, org, lower_time, upper_time, benchmark):
     query = deepcopy(base_query)
     qo = deepcopy(query_org_template)
@@ -105,6 +146,9 @@ def _publicationsBenchmarkOrg(base_query, org, lower_time, upper_time, benchmark
     result = models.Record.query(q=query)
     entries = result.get("facets", {}).get("publication_dates", {}).get("entries")
     
+    _trimTimesAndAdd(org, entries, lower_time, upper_time, benchmark)
+
+def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
     if lower_time > -1 or upper_time > -1:
         valid_entries = []
         for entry in entries:
@@ -112,9 +156,9 @@ def _publicationsBenchmarkOrg(base_query, org, lower_time, upper_time, benchmark
             if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
                 print "valid"
                 valid_entries.append(entry)
-        benchmark["report"][org] = valid_entries
+        benchmark["report"][name] = valid_entries
     else:
-        benchmark["report"][org] = entries
+        benchmark["report"][name] = entries
 
 def _valueCountReport(mainorg, j, benchmark):
     q = deepcopy(valuecount_query_template)
@@ -134,14 +178,6 @@ def _valueCountReport(mainorg, j, benchmark):
         if j.get("granularity") in ["month", "quarter", "year"]:
             q['facets']['award_values']['date_histogram']['interval'] = j.get("granularity")
     
-    # do the main organisation query
-    general_query = deepcopy(q)
-    qo = deepcopy(query_org_template)
-    qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-    general_query['query']['bool']['must'].append(qo)
-    main_org_result = models.Record.query(q=general_query)
-    benchmark["report"][mainorg] = main_org_result.get("facets", {}).get("award_values", {}).get("entries")
-    
     # for each of the additional orgs, do the same query with the different org
     for o in j.get("compare_org", []):
         org_query = deepcopy(q)
@@ -150,6 +186,16 @@ def _valueCountReport(mainorg, j, benchmark):
         org_query['query']['bool']['must'].append(qo)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
+        
+    # for each of the groups of people do the group query
+    for gname, people in j.get("compare_groups", {}).iteritems():
+        pers_query = deepcopy(q)
+        qp = deepcopy(b_group_template)
+        for person in people:
+            qp["terms"]["collaboratorPerson.canonical.exact"].append(person)
+        pers_query["query"]["bool"]["must"].append(qp)
+        result = models.Record.query(q=pers_query)
+        benchmark["report"][gname] = result.get("facets", {}).get("award_values", {}).get("entries")
 
 publications_query_template = {
     "query" : {
@@ -217,6 +263,12 @@ b_query_start_template = {
             "from" : "<start of range>"
         }
     }
+}
+
+b_group_template = {
+	"terms" : {
+		"collaboratorPerson.canonical.exact" : []
+	}
 }
 
 
