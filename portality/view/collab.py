@@ -6,7 +6,7 @@ from portality.core import app
 import portality.models as models
 
 from copy import deepcopy
-import json, csv, StringIO
+import json, csv, StringIO, time
 
 blueprint = Blueprint('collab', __name__)
 
@@ -49,15 +49,75 @@ def benchmarking(mainorg=None):
         return POST_benchmarking(mainorg)
 
 def GET_benchmarking(mainorg):
-    result_format = "html"
-    
-    if result_format == "html":
-        return render_template('collab/bench.html', mainorg=mainorg)
+    return render_template('collab/bench.html', mainorg=mainorg)
 
 def POST_benchmarking(mainorg):
-    q = deepcopy(b_query_template)
     j = request.json
     benchmark = {"parameters" : j, "report" : {}}
+    
+    # there are three different kinds of report, and we require
+    # two differnent queries to service them
+    if j["type"] == "publications":
+        _publicationsReport(mainorg, j, benchmark)
+    else:
+        _valueCountReport(mainorg, j, benchmark)
+    
+    # now make the response
+    resp = make_response(json.dumps(benchmark))
+    resp.mimetype = "application/json"
+    return resp
+
+def _publicationsReport(mainorg, j, benchmark):
+    q = deepcopy(publications_query_template)
+    
+    # build in the standard parts of the query
+    if j.get("start", "") != "":
+        qs = deepcopy(b_publication_from_template)
+        qs['range']['project.publication.date']['from'] = j.get("start")
+        q['query']['bool']['must'].append(qs)
+    
+    if j.get("end", "") != "":
+        qe = deepcopy(b_publication_to_template)
+        qe['range']['project.publication.date']['to'] = j.get("end")
+        q['query']['bool']['must'].append(qe)
+    
+    if j.get("granularity", "") != "":
+        if j.get("granularity") in ["month", "quarter", "year"]:
+            q['facets']['publication_dates']['date_histogram']['interval'] = j.get("granularity")
+    
+    lower_time = -1 if j.get("start", "") == "" else int(time.mktime(time.strptime(j.get("start"), "%Y-%m-%d"))) * 1000
+    upper_time = -1 if j.get("end", "") == "" else int(time.mktime(time.strptime(j.get("end"), "%Y-%m-%d"))) * 1000
+    print j.get("start"), j.get("end")
+    print lower_time, upper_time
+    
+    orgs = [mainorg] + j.get("compare_org", [])
+    
+    for org in orgs:
+        _publicationsBenchmarkOrg(q, org, lower_time, upper_time, benchmark)
+    
+def _publicationsBenchmarkOrg(base_query, org, lower_time, upper_time, benchmark):
+    query = deepcopy(base_query)
+    qo = deepcopy(query_org_template)
+    
+    qo['term']["collaboratorOrganisation.canonical.exact"] = org
+    query['query']['bool']['must'].append(qo)
+    
+    result = models.Record.query(q=query)
+    entries = result.get("facets", {}).get("publication_dates", {}).get("entries")
+    
+    if lower_time > -1 or upper_time > -1:
+        valid_entries = []
+        for entry in entries:
+            print entry["time"]
+            if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
+                print "valid"
+                valid_entries.append(entry)
+        benchmark["report"][org] = valid_entries
+    else:
+        benchmark["report"][org] = entries
+
+def _valueCountReport(mainorg, j, benchmark):
+    q = deepcopy(valuecount_query_template)
     
     # build in the standard parts of the query
     if j.get("start", "") != "":
@@ -75,23 +135,57 @@ def POST_benchmarking(mainorg):
             q['facets']['award_values']['date_histogram']['interval'] = j.get("granularity")
     
     # do the main organisation query
+    general_query = deepcopy(q)
     qo = deepcopy(query_org_template)
     qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-    q['query']['bool']['must'].append(qo)
-    main_org_result = models.Record.query(q=q)
+    general_query['query']['bool']['must'].append(qo)
+    main_org_result = models.Record.query(q=general_query)
     benchmark["report"][mainorg] = main_org_result.get("facets", {}).get("award_values", {}).get("entries")
     
     # for each of the additional orgs, do the same query with the different org
     for o in j.get("compare_org", []):
-        q['query']['bool']['must'][0]['term']["collaboratorOrganisation.canonical.exact"] = o
-        compare_result = models.Record.query(q=q)
+        org_query = deepcopy(q)
+        qo = deepcopy(query_org_template)
+        qo['term']["collaboratorOrganisation.canonical.exact"] = o
+        org_query['query']['bool']['must'].append(qo)
+        compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
-    
-    resp = make_response(json.dumps(benchmark))
-    resp.mimetype = "application/json"
-    return resp
 
-b_query_template = {
+publications_query_template = {
+    "query" : {
+        "bool" : {
+        	"must" : []
+        }
+    },
+    "size" : 0,
+    "facets" : {
+        "publication_dates" : {
+            "date_histogram" : {
+                "field" : "project.publication.date",
+                "interval" : "quarter"
+            }
+        }
+    }
+}
+
+b_publication_to_template = {
+    "range" : {
+        "project.publication.date" : {
+            "to" : "<end of range>"
+        }
+    }
+}
+
+b_publication_from_template = {
+    "range" : {
+        "project.publication.date" : {
+            "from" : "<start of range>"
+        }
+    }
+}
+
+
+valuecount_query_template = {
     "query" : {
         "bool" : {
         	"must" : []

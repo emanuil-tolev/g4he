@@ -6,7 +6,11 @@
 
 $(document).ready(function() {
     
-    function _getRowData(data, field) {
+    function _getRowData(params) {
+        var data = params.data ? params.data : []
+        var field = params.value_field ? params.value_field : "count"
+        var df = params.date_field ? params.date_field : "time"
+    
         // get a full list of the dates and process the rows for each organisation
         var dates = []
         var orgs = []
@@ -16,8 +20,8 @@ $(document).ready(function() {
             var org_rows = {}
             for (var i = 0; i < data[org].length; i++) {
                 var p = data[org][i]
-                if ($.inArray(p.time, dates) === -1) {
-                    dates.push(p.time)
+                if ($.inArray(p[df], dates) === -1) {
+                    dates.push(p[df])
                 }
                 org_rows[p.time] = p[field]
             }
@@ -82,7 +86,7 @@ $(document).ready(function() {
         var data = benchmark["report"];
         
         // calculate all the row data
-        var row_data = _getRowData(data, "count")
+        var row_data = _getRowData({data:data, value_field:"count"})
         
         // generate the HTML table
         var table = _getTable({
@@ -101,7 +105,7 @@ $(document).ready(function() {
         var data = benchmark["report"];
         
         // calculate all the row data
-        var row_data = _getRowData(data, "total")
+        var row_data = _getRowData({data:data, value_field:"total"})
         
         // generate the HTML table
         var table = _getTable({
@@ -118,9 +122,29 @@ $(document).ready(function() {
         return header + table;
     }
     
+    function publicationReport(benchmark) {
+        // get the report data out of the benchmark response
+        var data = benchmark["report"];
+        
+        // calculate all the row data
+        var row_data = _getRowData({data:data, value_field:"count"})
+        
+        // generate the HTML table
+        var table = _getTable({
+                orgs: row_data.orgs,
+                rows: row_data.rows,
+                date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
+            })
+        
+        var header = "<h2>comparing number of publications with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
+        
+        return header + table;
+    }
+    
     var reportFunctions = {
         "num_projects" : numProjectsReport,
-        "award_value" : awardValueReport
+        "award_value" : awardValueReport,
+        "publications" : publicationReport
     }
     
     var dateFunctions = {
