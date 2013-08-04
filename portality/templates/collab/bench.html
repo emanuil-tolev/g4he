@@ -154,7 +154,7 @@ $(document).ready(function() {
                         var year = d.getFullYear()
                         var month = d.getMonth()
                         var q = month < 3 ? "Q1" : month < 6 ? "Q2" : month < 9 ? "Q3" : "Q4" // month is 0 indexed
-                        return q + " " + year
+                        return year + " " + q
                     },
         "year" : function(millis) { return $.datepicker.formatDate("yy", new Date(millis)) }
     }
@@ -206,11 +206,11 @@ $(document).ready(function() {
         }
         
         // get the comparison information
-        // FIXME: this will all get replaced when we do a proper treatment of comparison selection
-        var ct = $("#compare_to").val();
-        if (ct && ct !== "") {
-            obj["compare_org"] = [ct]
-        }
+        obj["compare_org"] = []
+        $("span.org_record").each(function(i, e) {
+            var org = $(e).attr("data-org")
+            obj["compare_org"].push(org)
+        })
         
         $.ajax({
             type: "POST",
@@ -240,6 +240,21 @@ $(document).ready(function() {
                 }
             })
         }
+    });
+    
+    $("#add_compare_org").click(function() {
+        var org = $("#compare_to").val()
+        var id = org.replace(/ /g,'');
+        var record = "<span class='org_record' style='padding-right: 5px;' id='" + id + "' data-org='" + org + "'>" + 
+                    org + "&nbsp;(<a href='#' class='remove_org' data-id='" + id + "'>x</a>)</span>"
+        $("#comparing_to_list").append(record)
+        
+        // now re-bind the click function to the remove_org stuff
+        $(".remove_org").unbind("click")
+        $(".remove_org").click(function () {
+            var id = $(this).attr("data-id")
+            $("span[id=" + id + "]").remove()
+        })
     });
     
     $("#alternatives").hide()
@@ -275,8 +290,15 @@ $(document).ready(function() {
     <div class="span12"><div class="well">
         <h3>Comparison Options</h3>
         
-        <div id="compare_to_org">
-            <input type="text" name="compare_to" id="compare_to">
+        <div class="row-fluid">
+            <div class="span5" id="compare_to_org">
+                <h4>Choose organisations to compare to</h4>
+                <input type="text" name="compare_to" id="compare_to">
+                <button id="add_compare_org" class="btn btn-success">Add &gt;&gt;</button>
+            </div>
+            <div class="span7" id="comparing_to_list">
+                <h4>Selected organisations</h4>
+            </div>
         </div>
         
         <!-- can have other compare_to blocks here for other kinds of comparison -->
