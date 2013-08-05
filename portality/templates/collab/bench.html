@@ -219,18 +219,32 @@ $(document).ready(function() {
             obj["compare_org"].push(org)
         })
         
+        obj["compare_groups"] = {}
+        $(".compare_to_group").each(function(i, e) {
+            var id = $(e).attr("data-id")
+            var gname = $("input[name=group_name_" + id + "]").val()
+            if (gname && gname !== "")
+            {
+                obj["compare_groups"][gname]  = []
+                $(e).find("span.pers_record").each(function(i, e) {
+                    var pers = $(e).attr("data-pers")
+                    obj["compare_groups"][gname].push(pers)
+                })
+            }
+        })
+        
         // FIXME: currently only deals with a single group of people
         // get the comparison information for groups
-        var gname = $("input[name=group_name]").val()
-        obj["compare_groups"] = {}
-        if (gname && gname !== "")
-        {
-            obj["compare_groups"][gname]  = []
-            $("span.pers_record").each(function(i, e) {
-                var pers = $(e).attr("data-pers")
-                obj["compare_groups"][gname].push(pers)
-            })
-        }
+        //var gname = $("input[name=group_name]").val()
+        //obj["compare_groups"] = {}
+        //if (gname && gname !== "")
+        //{
+        //    obj["compare_groups"][gname]  = []
+        //    $("span.pers_record").each(function(i, e) {
+        //        var pers = $(e).attr("data-pers")
+        //        obj["compare_groups"][gname].push(pers)
+        //    })
+        //}
         
         alert(JSON.stringify(obj))
         
@@ -313,39 +327,45 @@ $(document).ready(function() {
     
     function groupForm(event) {
         event.preventDefault();
-        $("#compare_to_group").html(
-            '<div class="row-fluid" id="compare_to_group" style="padding: 10px 0px 10px 0px; border-top: 1px solid #cccccc">' +
-                '<div class="span5" id="compare_to_group_form">' +
+        $("#compare_to_group_container").show()
+        
+        var id = randomID()
+        $("#compare_to_group_container").append(
+            '<div class="row-fluid compare_to_group" data-id="' + id + '" id="compare_to_group_' + id + '" style="padding: 10px 0px 10px 0px; border-top: 1px solid #cccccc">' +
+                '<div class="span5">' +
                     '<h4>Give this group a name</h4>' +
-                    '<input type="text" name="group_name" placeholder="Group name (e.g. {{mainorg}} Archaeology Group)" style="width: 100%"><br>' +
+                    '<input data-id="' + id + '" type="text" name="group_name_' + id + '" placeholder="Group name (e.g. {{mainorg}} Archaeology Group)" style="width: 100%"><br>' +
                     '<h4>Choose people to group</h4>' +
-                    '<input type="text" name="select_person" id="select_person" style="width: 80%">&nbsp;' +
-                    '<button id="add_person" class="btn btn-success">Add &gt;&gt;</button>' +
+                    '<input type="text" name="select_person" id="select_person_' + id + '" style="width: 80%">&nbsp;' +
+                    '<button id="add_person_' + id + '" class="btn btn-success" data-id="' + id + '">Add &gt;&gt;</button>' +
                 '</div>' +
-                '<div class="span5" id="comparing_to_group_list">' +
+                '<div class="span5" id="comparing_to_group_list_' + id + '">' +
                     '<h4>Selected people</h4>' +
                 '</div>' +
                 '<div class="span2">' +
-                    '<button id="group_cancel" class="btn btn-danger">Remove Group</button>' +
+                    '<button id="group_cancel_' + id + '" class="btn btn-danger" data-id="' + id + '">Remove Group</button>' +
                 '</div>' +
             '</div>'
         );
         
-        $("#group_cancel").click(function(event) {
+        $("#group_cancel_" + id).click(function(event) {
             event.preventDefault()
-            $("#compare_to_group").html('<a href="#" id="create_group_link">create a group of people to benchmark</a>')
-            $("#create_group_link").click(groupForm)
+            var theid = $(this).attr("data-id") // might look weird, since the id is above, but something about closures ...
+            $("#compare_to_group_" + theid).remove()
+            if ($("#compare_to_group_container").children().length === 0) {
+                $("#compare_to_group_container").hide()
+            }
         });
         
-        $("#select_person").select2({
+        $("#select_person_" + id).select2({
             minimumInputLength: 3,
             placeholder: "select a person for this group",
             query: function (query) {
-                var internal = $("input[name=internal]").is(":checked")
+                //var internal = $("input[name=internal]").is(":checked") // FIXME: removed for the time being, since index cannot currently support
                 var url = "/organisation/person"
-                if (internal) {
-                    url = "/organisation/{{mainorg}}/person"
-                }
+                //if (internal) {
+                //    url = "/organisation/{{mainorg}}/person"
+                //}
                 $.ajax({
                     type : "GET",
                     data : {q : query.term},
@@ -362,24 +382,25 @@ $(document).ready(function() {
             }
         });
         
-        $("#add_person").click(function() {
-            var pers = $("#select_person").val()
-            var id = randomID()
-            var record = "<span class='pers_record' style='padding-right: 5px;' id='" + id + "' data-pers='" + pers + "'>" + 
-                        pers + "&nbsp;(<a href='#' class='remove_pers' data-id='" + id + "'>x</a>)</span>"
-            $("#comparing_to_group_list").append(record)
+        $("#add_person_" + id).click(function() {
+            var clickedid = $(this).attr("data-id") // because of closure, I think
+            var pers = $("#select_person_" + clickedid).val()
+            var pid = randomID()
+            var record = "<span class='pers_record' style='padding-right: 5px;' id='pers_" + pid + "' data-pers='" + pers + "'>" + 
+                        pers + "&nbsp;(<a href='#' class='remove_pers' data-id='" + pid + "'>x</a>)</span>"
+            $("#comparing_to_group_list_" + clickedid).append(record)
             
             // now re-bind the click function to the remove_org stuff
             $(".remove_pers").unbind("click")
             $(".remove_pers").click(function (event) {
                 event.preventDefault()
-                var id = $(this).attr("data-id")
-                $("span[id=" + id + "]").remove()
+                var theid = $(this).attr("data-id")
+                $("#pers_" + theid).remove()
             })
         });
     }
     
-    $("#compare_to_group").html('<a href="#" id="create_group_link">create a group of people to benchmark</a>')
+    $("#compare_to_group_container").hide()
     $("#create_group_link").click(groupForm)
     
 });
@@ -417,7 +438,9 @@ $(document).ready(function() {
         
         <div class="row-fluid" id="org_compare" style="padding: 10px 0px 10px 0px"></div>
         
-        <div class="row-fluid" id="compare_to_group" style="padding: 10px 0px 10px 0px"></div>
+        <div class="row-fluid" id="compare_to_group_container" style="padding: 10px 0px 10px 0px"></div>
+        
+        <div class="row-fluid" id="add_group_box" style="padding: 10px 0px 10px 0px"><a href="#" id="create_group_link">create a group of people to benchmark</a></div>
         
     </div></div>
 </div>
