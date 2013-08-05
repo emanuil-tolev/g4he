@@ -70,25 +70,89 @@ person_search_query = {
 #####################################################################
 
 @blueprint.route("/<mainorg>/benchmarking", methods=["GET", "POST"])
-def benchmarking(mainorg=None):
+@blueprint.route("/<mainorg>/benchmarking.<suffix>", methods=["GET"])
+def benchmarking(mainorg=None, suffix=None):
     if request.method == "GET":
-        return GET_benchmarking(mainorg)
+        returntype = "csv" if suffix == "csv" else "html"
+        return GET_benchmarking(mainorg, returntype)
     elif request.method == "POST":
         return POST_benchmarking(mainorg)
 
-def GET_benchmarking(mainorg):
-    return render_template('collab/bench.html', mainorg=mainorg)
+def GET_benchmarking(mainorg, returntype):
+    if returntype == "html":
+        return render_template('collab/bench.html', mainorg=mainorg)
+    elif returntype == "csv":
+        j = request.values.get("obj")
+        obj = json.loads(j)
+        benchmark = {"parameters" : obj, "report" : {}}
+        return _get_csv(mainorg, benchmark)
+        
+def _get_csv(mainorg, benchmark):
+    # call generic method to calculate the benchmarking data
+    _populate_benchmark(mainorg, benchmark)
+
+    value_field = "count"
+    date_field = "time"
+    if benchmark["parameters"]["type"] == "award_value":
+        value_field = "total"
+    
+    rows, dates, orgs = _get_report_rows(benchmark["report"], value_field=value_field, date_field=date_field)
+
+    output = StringIO.StringIO()
+    writer = csv.writer(output)
+    
+    headers = ["date"] + [org for org in orgs]
+    writer.writerow(headers)
+    for row in rows:
+        formatted = [time.strftime("%Y-%m-%d", time.gmtime(row[0]/1000))] + row[1:]
+        writer.writerow(formatted)
+    
+    resp = make_response(output.getvalue())
+    resp.mimetype = "text/csv"
+    resp.headers['Content-Disposition'] = 'attachment; filename="' + mainorg + '_benchmarking_report.csv"'
+    return resp
+
+def _populate_benchmark(mainorg, benchmark):
+    # there are three different kinds of report, and we require
+    # two differnent queries to service them
+    if benchmark["parameters"]["type"] == "publications":
+        _publicationsReport(mainorg, benchmark["parameters"], benchmark)
+    else:
+        _valueCountReport(mainorg, benchmark["parameters"], benchmark)
+
+def _get_report_rows(data, value_field="count", date_field="time"):
+    dates = []
+    orgs = []
+    row_sets = {}
+    for org in data:
+        orgs.append(org)
+        org_rows = {}
+        for p in data.get(org):
+            if p[date_field] not in dates:
+                dates.append(p[date_field])
+            org_rows[p[date_field]] = p[value_field]
+        row_sets[org] = org_rows
+    
+    dates.sort()
+    orgs.sort()
+    rows = []
+    for date in dates:
+        row = [date]
+        for org in orgs:
+            if date in row_sets[org]:
+                row.append(row_sets[org][date])
+            else:
+                row.append(0)
+        rows.append(row)
+    
+    return rows, dates, orgs
 
 def POST_benchmarking(mainorg):
     j = request.json
     benchmark = {"parameters" : j, "report" : {}}
     
-    # there are three different kinds of report, and we require
-    # two differnent queries to service them
-    if j["type"] == "publications":
-        _publicationsReport(mainorg, j, benchmark)
-    else:
-        _valueCountReport(mainorg, j, benchmark)
+    # call generic method to actually calculate the businesss
+    _populate_benchmark(mainorg, benchmark)
     
     # now make the response
     resp = make_response(json.dumps(benchmark))

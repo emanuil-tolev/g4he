@@ -27,7 +27,7 @@ $(document).ready(function() {
                 if ($.inArray(p[df], dates) === -1) {
                     dates.push(p[df])
                 }
-                org_rows[p.time] = p[field]
+                org_rows[p[df]] = p[field]
             }
             row_sets[org] = org_rows
         }
@@ -186,6 +186,11 @@ $(document).ready(function() {
         "year" : function(millis) { return $.datepicker.formatDate("yy", new Date(millis)) }
     }
     
+    function getCsvUrl() {
+        var obj = getReportOptions()
+        return "/organisation/{{mainorg}}/benchmarking.csv?obj=" + encodeURIComponent(JSON.stringify(obj));
+    }
+    
     function generateReport(benchmark) {
         
         // find the report function and call it
@@ -193,16 +198,16 @@ $(document).ready(function() {
         if (fn) {
             var report = fn(benchmark)
             var frag = report.header + report.description
+            var csv_url = getCsvUrl()
             
             frag += '<div class="row-fluid" id="alternatives">' +
-                        '<div class="span12" style="text-align: right"><a href="#" class="reporturl" data-format="csv">download as csv</a></div>' +
+                        '<div class="span12" style="text-align: right"><a href="' + csv_url + '" id="reporturl" data-format="csv">download as csv</a></div>' +
                     '</div>'
             
             frag += report.table
             
             $("#report").html(frag)
             $("#report_table").tablesorter()
-            $("#alternatives").show()
         }
     }
     
@@ -223,8 +228,8 @@ $(document).ready(function() {
     
     $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
     
-    $("#generate").click(function() {
-    
+    function getReportOptions() {
+        
         var obj = {};
         
         // get the standard report parameters
@@ -265,6 +270,11 @@ $(document).ready(function() {
             }
         })
         
+        return obj
+    }
+    
+    function generateUI() {
+        var obj = getReportOptions()
         $.ajax({
             type: "POST",
             url: "/organisation/{{mainorg}}/benchmarking",
@@ -273,7 +283,9 @@ $(document).ready(function() {
             data: JSON.stringify(obj),
             success : generateReport
         })
-    }); 
+    }
+    
+    $("#generate").click(generateUI)
     
     function compareToForm(event) {
         event.preventDefault();
