@@ -99,9 +99,16 @@ $(document).ready(function() {
                 date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
             })
         
-        var header = "<h2>comparing number of projects with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
+        var header = "<h2>comparing number of projects with " + (row_data.orgs.length - 1) + " other organisations/groups over " + row_data.dates.length + " time periods</h2>"
         
-        return header + table;
+        var description = "<p>This report shows the number of projects each organisation/group was involved in (through the PI, Co-I, or as the Lead Research " +
+                            "Organisation or a Fellow) which <strong>started</strong> during the time period.</p>"
+        
+        return {
+            header : header,
+            table : table,
+            description : description
+        }
     }
     
     function awardValueReport(benchmark) {
@@ -121,9 +128,17 @@ $(document).ready(function() {
                 date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
             })
         
-        var header = "<h2>comparing award values with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
+        var header = "<h2>comparing award values with " + (row_data.orgs.length - 1) + " other organisations/groups over " + row_data.dates.length + " time periods</h2>"
         
-        return header + table;
+        var description = "<p>This report shows the sum of all amounts awarded to projects each organisation/group was involved in (through the PI, Co-I, or as the Lead " +
+                            "Research Organisation or a Fellow) which <strong>started</strong> during the time period.  It <strong>does not</strong> show " +
+                            "exactly what share of that money was actually received or when that money was actually transferred from the funder to the organisation.</p>"
+        
+        return {
+            header : header,
+            table : table,
+            description : description
+        }
     }
     
     function publicationReport(benchmark) {
@@ -140,9 +155,17 @@ $(document).ready(function() {
                 date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
             })
         
-        var header = "<h2>comparing number of publications with " + (row_data.orgs.length - 1) + " other organisations over " + row_data.dates.length + " time periods</h2>"
+        var header = "<h2>comparing number of publications with " + (row_data.orgs.length - 1) + " other organisations/groups over " + row_data.dates.length + " time periods</h2>"
         
-        return header + table;
+        var description = "<p>This report shows the number of publications issued by projects each organisation/group was involed in (through the PI, Co-I, or as the " + 
+                            "Lead Research Organisation or a Fellow) that were <strong>published</strong> during the time period.  The exact relationship of the " +
+                            "members of the organisation/group to the publication is not specified.</p>"
+        
+        return {
+            header : header,
+            table : table,
+            description : description
+        }
     }
     
     var reportFunctions = {
@@ -168,7 +191,15 @@ $(document).ready(function() {
         // find the report function and call it
         var fn = reportFunctions[benchmark["parameters"]["type"]]
         if (fn) {
-            var frag = fn(benchmark)
+            var report = fn(benchmark)
+            var frag = report.header + report.description
+            
+            frag += '<div class="row-fluid" id="alternatives">' +
+                        '<div class="span12" style="text-align: right"><a href="#" class="reporturl" data-format="csv">download as csv</a></div>' +
+                    '</div>'
+            
+            frag += report.table
+            
             $("#report").html(frag)
             $("#report_table").tablesorter()
             $("#alternatives").show()
@@ -219,6 +250,7 @@ $(document).ready(function() {
             obj["compare_org"].push(org)
         })
         
+        // comparison information for groups
         obj["compare_groups"] = {}
         $(".compare_to_group").each(function(i, e) {
             var id = $(e).attr("data-id")
@@ -233,21 +265,6 @@ $(document).ready(function() {
             }
         })
         
-        // FIXME: currently only deals with a single group of people
-        // get the comparison information for groups
-        //var gname = $("input[name=group_name]").val()
-        //obj["compare_groups"] = {}
-        //if (gname && gname !== "")
-        //{
-        //    obj["compare_groups"][gname]  = []
-        //    $("span.pers_record").each(function(i, e) {
-        //        var pers = $(e).attr("data-pers")
-        //        obj["compare_groups"][gname].push(pers)
-        //    })
-        //}
-        
-        alert(JSON.stringify(obj))
-        
         $.ajax({
             type: "POST",
             url: "/organisation/{{mainorg}}/benchmarking",
@@ -257,8 +274,6 @@ $(document).ready(function() {
             success : generateReport
         })
     }); 
-    
-    $("#alternatives").hide()
     
     function compareToForm(event) {
         event.preventDefault();
@@ -446,10 +461,6 @@ $(document).ready(function() {
 </div>
 
 <button id="generate" class="btn btn-primary">Generate the report &gt;</button>
-
-<div class="row-fluid" id="alternatives">
-    <div class="span12" style="text-align: right"><a href="#" class="reporturl" data-format="csv">download as csv</a></div>
-</div>
 
 <div id="report"></div>
 
