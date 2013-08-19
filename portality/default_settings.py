@@ -18,7 +18,7 @@ PUBLIC_REGISTER = True # Can people register publicly? If false, only the superu
 SHOW_LOGIN = True # if this is false the login link is not shown in the default template, but login is not necessarily disabled
 
 # elasticsearch settings
-ELASTIC_SEARCH_HOST = "http://localhost:9200"
+ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200"
 ELASTIC_SEARCH_DB = "g4he2"
 INITIALISE_INDEX = False # whether or not to try creating the index and required index types on startup
 NO_QUERY_VIA_API = ['account'] # list index types that should not be queryable via the API

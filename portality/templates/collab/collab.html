@@ -4,15 +4,363 @@
 
 <script type="text/javascript">
 $(document).ready(function() {
-    // set up the table sorter on the results
-    $("#collaborations").tablesorter();   
-    $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
     
-    $("a.reporturl").each(function() {
+    /////////////////////////////////////////////////////////////////////////
+    
+    // generic graphing functions
+    
+    function doGraph(params) {
+        var data = params.data
+        var limit = params.limit ? params.limit : data.length
+        var label_field = params.label_field
+        var value_field = params.value_field
+        var name = params["name"]
+        var selector = params.svg_selector
+        var colour = params.colour
+        
+        
+        
+        var datums = []
+        var bars = {"key" : name, "color" : colour, "values" : []}
+        
+        for (var i = 0; i < data.length && i < limit; i++) {
+            var point = {}
+            point["label"] = data[i][label_field]
+            point["value"] = data[i][value_field]
+            bars.values.push(point)
+        }
+        datums.push(bars)
+        
+        var height = (28 * limit) + 42 + 43
+        $(selector).css("height", height + "px")
+        
+        // generate the graph
+        nv.addGraph(function() {
+            var chart = nv.models.multiBarHorizontalChart()
+              .x(function(d) { return d.label })
+              .y(function(d) { return d.value })
+              .margin({top: 30, right: 100, bottom: 50, left: 175})
+              .showValues(false)
+              .tooltips(true)
+              .showControls(false);
+
+            chart.yAxis
+              .tickFormat(d3.format(',.0f'));
+
+            d3.select(selector)
+              .datum(datums)
+              .transition().duration(500)
+              .call(chart);
+
+            nv.utils.windowResize(chart.update);
+
+            return chart;
+        });
+    }
+    
+    ///////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////////////////
+    // collaborator table and graph
+    
+    // once the page has loaded, we'll store all the collaborator data here, so
+    // we don't need to re-fetch it each time the widget's parameters are changed
+    var collaborations_cache = undefined;
+    
+    // generate the top list of collaborators
+    function topCollaborators(count) {
+        var obj = {"count" : count};
+        $.ajax({
+            type: "GET",
+            url: "/organisation/{{mainorg}}/collaboration/top",
+            dataType: "json",
+            data: obj,
+            success : generateCollaboratorDash
+        })
+    }
+    
+    function generateTopCollaboratorsGraph(data, limit) {
+        // generate the default graph
+        doGraph({
+            data: data, 
+            limit: limit, 
+            label_field : "term", 
+            value_field: "count", 
+            name : "Project Count",
+            svg_selector : "#collaboration_highlight_graph_container svg",
+            colour : "#6C3BFF"
+        })
+        
+        // now add the graph controls
+        var frag = "<input type='radio' name='collab_graph_type' value='projects' checked='checked' id='project_button'>&nbsp;Project Count&nbsp;&nbsp;&nbsp;&nbsp;"
+        frag += "<input type='radio' name='collab_graph_type' value='funding' id='funding_button'>&nbsp;Collaboration Funding"
+        $("#collab_graph_controls").html(frag);
+        
+        $("#project_button").change(function() {
+            if (!$(this).attr("checked")) { return }
+            var limit = $("select[name=collaboration_highlight_count]").val()
+            doGraph({
+                data: collaborations_cache, 
+                limit: limit, 
+                label_field: "term", 
+                value_field: "count", 
+                name: "Project Count",
+                svg_selector : "#collaboration_highlight_graph_container svg",
+                colour : "#6C3BFF"
+            })
+        })
+        
+        $("#funding_button").change(function() {
+            if (!$(this).attr("checked")) { return }
+            var limit = $("select[name=collaboration_highlight_count]").val()
+            doGraph({
+                data: collaborations_cache, 
+                limit: limit, 
+                label_field: "term", 
+                value_field: "total", 
+                name: "Collaboration Funding",
+                svg_selector : "#collaboration_highlight_graph_container svg",
+                colour : "#6C3BFF"
+            })
+        })
+    }
+    
+    function generateTopCollaboratorsTable(data, limit) {
+        var frag = '<table id="collaboration_highlight_table" class="tablesorter"> \
+            <thead> \
+                <tr> \
+                    <th>Organisation</th> \
+                    <th>Projects Collaborated on</th> \
+                    <th>Total Funding for Collaboration</th> \
+                </tr> \
+            </thead> \
+            <tbody>'
+        
+        for (var i = 0; i < data.length && i < limit; i++) {
+            frag += '<tr>'
+            frag += '<td><a href="' + getReportUrl({add_orgs : [data[i].term]}) + '" class="highlighturl" data-add-orgs="' + data[i].term + '">' + data[i].term + "</a></td>"
+            frag += "<td>" + data[i].count + "</td>"
+            frag += "<td>£" + data[i].formatted_total + "</td>"
+            frag += "</tr>"
+        }
+        
+        frag += "</tbody></table>"
+        
+        var help = "<p>Click on an organisation to see the projects you collaborated with them on and who the other collaborators were.</p>"
+        
+        var csv = '<div class="row-fluid"> \
+                    <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/top.csv">download full csv</a></div> \
+                </div>'
+        
+        $("#collaboration_highlight_table_container").html(help + csv + frag);
+        $("#collaboration_highlight_table").tablesorter()
+        
+        // re-initialise the highlight url handling
+        $(".highlighturl").unbind()
+        $(".highlighturl").click(highlightUrlClick)
+    }
+    
+    function generateFullCollaboratorsPullDown(data) {
+        var frag = "<option value=''>Select a collaborator....</option>"
+        
+        for (var i = 0; i < data.length; i++) {
+            var plural = data[i].count > 1 ? "s" : ""
+            frag += "<option value='" + data[i].term + "'>" + data[i].term + 
+                    "&nbsp;&mdash;&nbsp;" + data[i].count + " project" + plural + " totalling £" + 
+                    data[i].formatted_total + "</option>"
+        }
+        $("select[name=highlight_collab]").html(frag)
+        
+        $("#view_report_button_collab").removeAttr("disabled")
+    }
+    
+    function generateCollaboratorDash(data) {
+        // remember the data
+        collaborations_cache = data
+        
+        // figure out how many collaborators we want in the table and graph
+        var limit = $("select[name=collaboration_highlight_count]").val()
+        generateTopCollaboratorsTable(data, limit)
+        generateTopCollaboratorsGraph(data, limit)
+        generateFullCollaboratorsPullDown(data)
+    }
+    
+    // actually generate the collaborators list
+    topCollaborators(0)
+    
+    $("select[name=collaboration_highlight_count]").change(function() {
+        var count = $(this).val()
+        generateTopCollaboratorsTable(collaborations_cache, count)
+        generateTopCollaboratorsGraph(collaborations_cache, count)
+    })
+    
+    ///////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////////////////
+    // funder table and graph
+    
+    var funder_cache = undefined;
+    
+    function funders() {
+        $.ajax({
+            type: "GET",
+            url: "/organisation/{{mainorg}}/collaboration/funders",
+            dataType: "json",
+            success : generateFunders
+        })
+    }
+    
+    function generateFunderGraph(data) {
+        // generate the default graph
+        doGraph({
+            data: data,
+            label_field : "term", 
+            value_field: "count", 
+            name : "Projects Funded",
+            svg_selector : "#funder_highlight_graph_container svg",
+            colour : "#6C3BFF"
+        })
+        
+        // now add the graph controls
+        var frag = "<input type='radio' name='funder_graph_type' value='projects' checked='checked' id='funder_project_button'>&nbsp;Projects Funded&nbsp;&nbsp;&nbsp;&nbsp;"
+        frag += "<input type='radio' name='funder_graph_type' value='funding' id='funder_funding_button'>&nbsp;Total Funding for Collaborations"
+        $("#funder_graph_controls").html(frag);
+        
+        $("#funder_project_button").change(function() {
+            if (!$(this).attr("checked")) { return }
+            doGraph({
+                data: funder_cache, 
+                label_field: "term", 
+                value_field: "count", 
+                name: "Projects Funded",
+                svg_selector : "#funder_highlight_graph_container svg",
+                colour : "#6C3BFF"
+            })
+        })
+        
+        $("#funder_funding_button").change(function() {
+            if (!$(this).attr("checked")) { return }
+            doGraph({
+                data: funder_cache, 
+                label_field: "term", 
+                value_field: "total", 
+                name: "Total Funding for Collaborations",
+                svg_selector : "#funder_highlight_graph_container svg",
+                colour : "#6C3BFF"
+            })
+        })
+    }
+    
+    // FIXME: this is basically the same as the collaboration table, so may consider
+    // combining them into a generic function
+    // though note that although they are similar, they have some fundamental differences
+    // which may be difficult to abstract
+    function generateFunderTable(data) {
+        var frag = '<table id="funder_highlight_table" class="tablesorter"> \
+            <thead> \
+                <tr> \
+                    <th>Funder</th> \
+                    <th>Collaborative Projects Funded</th> \
+                    <th>Total Funding for Collaborative Projects</th> \
+                </tr> \
+            </thead> \
+            <tbody>'
+        
+        for (var i = 0; i < data.length; i++) {
+            frag += '<tr>'
+            frag += '<td><a href="' + getReportUrl({add_funder : data[i].term}) + '" class="highlighturl" data-add-funder="' + data[i].term + '">' + data[i].term + "</a></td>"
+            frag += "<td>" + data[i].count + "</td>"
+            frag += "<td>£" + data[i].formatted_total + "</td>"
+            frag += "</tr>"
+        }
+        
+        frag += "</tbody></table>"
+        
+        var help = "<p>Click on the funder name to see projects they funded and your collaborators where you collaborated with one or more organisations</p>"
+        
+        var csv = '<div class="row-fluid"> \
+                    <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/funders.csv">download full csv</a></div> \
+                </div>'
+        
+        $("#funder_highlight_table_container").html(help + csv + frag);
+        $("#funder_highlight_table").tablesorter()
+        
+        // re-initialise the highlight url handling
+        $(".highlighturl").unbind()
+        $(".highlighturl").click(highlightUrlClick)
+    }
+    
+    function generateFundersPullDown(data) {
+        var frag = "<option value=''>Select a funder....</option>"
+        
+        for (var i = 0; i < data.length; i++) {
+            var plural = data[i].count > 1 ? "s" : ""
+            frag += "<option value='" + data[i].term + "'>" + data[i].term + 
+                    "&nbsp;&mdash;&nbsp;" + data[i].count + " project" + plural + " totalling £" + 
+                    data[i].formatted_total + "</option>"
+        }
+        $("select[name=highlight_funder]").html(frag)
+        // $("select[name=funder]").append(options)
+        
+        $("#view_report_button_funder").removeAttr("disabled")
+    }
+    
+    function generateFunders(data) {
+        // remember the data
+        funder_cache = data
+        
+        generateFunderTable(data)
+        generateFunderGraph(data)
+        generateFundersPullDown(data)
+    }
+    
+    // actually generate the funders
+    funders()
+    
+    ///////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////////////////
+    // handling the hightlight & report urls and buttons
+    
+    function reportLoading() {
+        // throw up the loading screen
+        $("#report_container").html('<strong style="color: #cccccc; font-size: 150%; padding: 40px">Loading report...</strong>')
+    }
+    
+    // this function resets the report to the highlight parameters, overwriting
+    // any existing report parameters
+    function highlightUrlClick(event) {
+        event.preventDefault()
+        
+        add_orgs_list = $(this).attr("data-add-orgs")
+        add_orgs = []
+        if (add_orgs_list != null && add_orgs_list !== "") {
+            add_orgs = add_orgs_list.split(",")
+        }
+        
+        // see if there is a funder to add
+        add_funder = $(this).attr("data-add-funder")
+        
+        setParameters({
+            collab_orgs : add_orgs,
+            funder : add_funder
+        })
+        
+        // ensure all the bits are on display
+        $("#report_parameters").show();
+        $("#report_controls").show();
+        $("#report_container").show()
+        
+        fetchReport()
+    }
+    
+    function reportUrlClick(event) {
+        event.preventDefault()
+        
         // determine if there are any orgs to exclude
         exclude_list = $(this).attr("data-exclude-orgs")
         exclude_orgs = []
-        if (exclude_list != null && exclude_list != "")
+        if (exclude_list != null && exclude_list !== "")
         {
             exclude_orgs = exclude_list.split(",")
         }
@@ -21,186 +369,635 @@ $(document).ready(function() {
         exclude_funder = $(this).attr("data-exclude-funder")
         
         // find out the format of the desired data
-        format = $(this).attr("data-format")
+        // format = $(this).attr("data-format")
         
         // see if there are any orgs to add to the list of collaborators
-        add_orgs = $(this).attr("data-add-orgs")
+        add_orgs_list = $(this).attr("data-add-orgs")
+        add_orgs = []
+        if (add_orgs_list != null && add_orgs_list !== "") {
+            add_orgs = add_orgs_list.split(",")
+        }
         
         // see if there is a funder to add
         add_funder = $(this).attr("data-add-funder")
         
-        $(this).attr("href", reportUrl(exclude_orgs, exclude_funder, format, add_orgs, add_funder))
-    });
-    
-    function reportUrl(exclude_orgs, exclude_funder, format, add_orgs) {
-        var mainorg = "{{mainorg}}"
-        var url = "/organisation/" + mainorg + "/collaboration?"
-        var collab = "{{collab_orgs|join(',')}}"
-        var collab_orgs = collab.split(",")
-        var funder = {% if funder %} "{{funder}}" {% else %} null {% endif %}
-        var start = {% if start %} "{{ start }}" {% else %} null {% endif %}
-        var end = {% if end %} "{{ end }}" {% else %} null {% endif %}
-        var upper = {% if upper %} "{{ upper }}" {% else %} null {% endif %}
-        var lower = {% if lower %} "{{ lower }}" {% else %} null {% endif %}
-                
-        // add any collaborators, excluding those specifically requested to exclude,
-        // and adding those which should be added
-        var collab_frag = ""
-        if (!exclude_orgs) {
-            exclude_orgs = []
-        }
-        for (i in collab_orgs) {
-            if ($.inArray(collab_orgs[i], exclude_orgs) == -1) {
-                if (i > 0) {
-                    collab_frag += ","
-                }
-                collab_frag += collab_orgs[i]
-            }
-        }
-        if (add_orgs && $.inArray(add_orgs, collab_orgs) == -1) {
-            if (collab_frag != "") {
-                collab_frag += ","
-            }
-            collab_frag += add_orgs
-        }
-        if (collab_frag != "") {
-            url += "&collab=" + collab_frag
-        }
+        // now update the report parameters
+        updateReportParams({
+            exclude_orgs: exclude_orgs, 
+            exclude_funder: exclude_funder, 
+            add_orgs : add_orgs, 
+            add_funder: add_funder
+        })
         
-        // add the funder if necessary
-        if ((funder || add_funder) && !exclude_funder) {
-            f = funder ? funder : add_funder
-            url += "&funder=" + f
-        }
+        // ensure all the bits are on display
+        $("#report_parameters").show();
+        $("#report_controls").show();
+        $("#report_container").show()
         
-        // set the output format
-        if (format) {
-            url += "&format=" + format
-        }
-        
-        // add the start and end date constraints if they exist
-        if (start) {
-            url += "&start=" + start
-        }
-        if (end) {
-            url += "&end=" + end
-        }
-        
-        // add the upper and lower value constraints if they exist
-        if (upper) {
-            url += "&upper=" + upper
-        }
-        if (lower) {
-            url += "&lower=" + lower
-        }
-        
-        return url
+        fetchReport()
     }
+    
+    $("#view_report_button_collab").click(function(event) {
+        event.preventDefault();
+        var org = $("select[name=highlight_collab]").val()
+        
+        if (org === undefined || org === "") {
+            return
+        }
+        
+        setParameters({
+            collab_orgs : [org]
+        })
+        
+        // ensure all the bits are on display
+        $("#report_parameters").show();
+        $("#report_controls").show();
+        $("#report_container").show()
+        
+        fetchReport()
+    })
+    
+    $("#view_report_button_funder").click(function(event) {
+        event.preventDefault();
+        var funder = $("select[name=highlight_funder]").val()
+        
+        if (funder === undefined || funder === "") {
+            return
+        }
+        
+        setParameters({
+            funder : funder
+        })
+        
+        // ensure all the bits are on display
+        $("#report_parameters").show();
+        $("#report_controls").show();
+        $("#report_container").show()
+        
+        fetchReport()
+    })
+    
+    $("#view_all_collaborations").click(function(event) {
+        event.preventDefault()
+        
+        // ensure all the bits are on display
+        $("#report_parameters").show();
+        $("#report_controls").show();
+        $("#report_container").show()
+        
+        fetchReport()
+    })
+    
+    $("#update_report_options").click(function(event) {
+        event.preventDefault()
+        
+        param_patch = {}
+        
+        // extract the values from the form
+        var lower = $("input[name=lower]").val()
+        if (lower === "") { 
+            param_patch["exclude_lower"] = true
+        }
+        else {
+            param_patch["add_lower"] = lower
+        }
+        
+        var upper = $("input[name=upper]").val()
+        if (upper === "") {
+            param_patch["exclude_upper"] = true
+        }
+        else {
+            param_patch["add_upper"] = upper
+        }
+        
+        var start = $("input[name=start]").val()
+        if (start === "") { 
+            param_patch["exclude_start"] = true
+        }
+        else {
+            param_patch["add_start"] = start
+        }
+        
+        var end = $("input[name=end]").val()
+        if (end === "") { 
+            param_patch["exclude_end"] = true
+        }
+        else {
+            param_patch["add_end"] = end
+        }
+        
+        var collab = $("select[name=collab]").val()
+        if (collab && collab !== "") { 
+            param_patch["add_orgs"] = [collab]
+        }
+        
+        var funder = $("select[name=funder]").val()
+        if (funder && funder !== "") { 
+            param_patch["add_funder"] = funder
+        }
+        
+        updateReportParams(param_patch)
+        
+        alert(JSON.stringify(report_parameters))
+        
+        fetchReport()
+    })
+    
+    ///////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////////////////
+    
+    // handling the report arguments, urls and query parameters
+    
+    var report_parameters = {
+        "mainorg" : "{{mainorg}}",
+        "collab_orgs" : [],
+        "funder": undefined,
+        "start" : undefined,
+        "end" : undefined,
+        "upper" : undefined,
+        "lower" : undefined
+    }
+    
+    function setParameters(params) {
+        var orgs = params.collab_orgs
+        var funder = params.funder
+        var start = params.start
+        var end = params.end
+        var upper = params.upper
+        var lower = params.lower
+        
+        if (orgs) {
+            report_parameters.collab_orgs = orgs
+        }
+        else {
+            report_parameters.collab_orgs = []
+        }
+        
+        if (funder) {
+            report_parameters.funder = funder
+        }
+        else {
+            report_parameters.funder = undefined
+        }
+        
+        if (start) {
+            report_parameters.start = start
+        }
+        else {
+            report_parameters.start = undefined;
+        }
+        
+        if (end) {
+            report_parameters.end = end
+        }
+        else {
+            report_parameters.end = undefined
+        }
+        
+        if (upper) {
+            report_parameters.upper = upper
+        }
+        else {
+            report_parameters.upper = undefined
+        }
+        
+        if (lower) {
+            report_parameters.lower = lower
+        }
+        else {
+            report_parameters.lower = undefined
+        }
+    }
+    
+    function patchParameters(patch) {
+        // extract the parameters we are interested in
+        var add_orgs = patch.add_orgs
+        var exclude_orgs = patch.exclude_orgs
+        var exclude_funder = patch.exclude_funder
+        var format = patch.format
+        var add_funder = patch.add_funder
+        var add_start = patch.add_start
+        var add_end = patch.add_end
+        var add_lower = patch.add_lower
+        var add_upper = patch.add_upper
+        var exclude_start = patch.exclude_start
+        var exclude_end = patch.exclude_end
+        var exclude_lower = patch.exclude_lower
+        var exclude_upper = patch.exclude_upper
+        
+        // clone the current report parameters
+        var patchedParams = $.extend(true, {}, report_parameters);
+        
+        // the organisations to add to the list
+        if (add_orgs) {
+            for (var i = 0; i < add_orgs.length; i++) {
+                var org = add_orgs[i]
+                if ($.inArray(org, patchedParams.collab_orgs) === -1) {
+                    patchedParams.collab_orgs.push(org)
+                }
+            }
+        }
+        
+        // remove organisations from the list
+        if (exclude_orgs) {
+            var newOrgs = []
+            for (var i = 0; i < patchedParams.collab_orgs.length; i++) {
+                var org = patchedParams.collab_orgs[i]
+                if ($.inArray(org, exclude_orgs) === -1) {
+                    newOrgs.push(org)
+                }
+            }
+            patchedParams.collab_orgs = newOrgs
+        }
+        
+        // remove or add the funder if necessary
+        if (exclude_funder) {
+            patchedParams.funder = undefined;
+        }
+        else if (add_funder) {
+            patchedParams.funder = add_funder
+        }
+        
+        // the format is a URL extension, and not part of the standard report parameters
+        // so we have to add an extra argument
+        if (format) {
+            patchedParams["format"] = format
+        }
+        
+        if (add_start) {
+            patchedParams.start = add_start
+        }
+        else if (exclude_start) {
+            patchedParams.start = undefined
+        }
+        
+        if (add_end) {
+            patchedParams.end = add_end
+        }
+        else if (exclude_end) {
+            patchedParams.end = undefined;
+        }
+        
+        if (add_lower) {
+            patchedParams.lower = add_lower
+        }
+        else if (exclude_lower) {
+            patchedParams.lower = undefined;
+        }
+        
+        if (add_upper) {
+            patchedParams.upper = add_upper
+        }
+        else if (exclude_upper) {
+            patchedParams.upper = undefined;
+        }
+        
+        return patchedParams
+    }
+    
+    function getReportUrl(params) {
+        // patch the general parameters with the supplied patch parameters
+        // (without overwriting the general parameters)
+        var urlParams = patchParameters(params)
+        
+        // get the query arguments for the report
+        var qargs = getQueryArgs(urlParams)
+        
+        // set the base url for the main organisation, using the shared report_parameters
+        var baseurl = "/organisation/" + report_parameters.mainorg + "/collaboration"
+        
+        // now stitch all the bits together into a URL
+        var q = "?"
+        var first = true
+        for (var arg in qargs) {
+            if (!first) { q += "&" }
+            q += arg + "=" + qargs[arg]
+            first = false
+        }
+        
+        return baseurl + q
+    }
+    
+    function updateReportParams(params) {
+        // clone and patch the existing parameters
+        var updatedParams = patchParameters(params)
+        
+        // manual copy of each element back to the main report_parameters
+        // variable (to avoid issues of scope, we can't just overwrite); also
+        // this allows us to prevent the report parameters becoming accidentally
+        // polluted or illegally modified
+        report_parameters.collab_orgs = updatedParams.collab_orgs
+        report_parameters.funder = updatedParams.funder
+        report_parameters.start = updatedParams.start
+        report_parameters.end = updatedParams.end
+        report_parameters.upper = updatedParams.upper
+        report_parameters.lower = updatedParams.lower
+    }
+    
+    function getQueryArgs(params) {
+        var args = {}
+        
+        // omit the mainorg - this is not in the query params
+        //args["mainorg"] = params.mainorg
+        
+        if (params.funder) {
+            args["funder"] = params.funder
+        }
+        if (params.start) {
+            args["start"] = params.start
+        }
+        if (params.end) {
+            args["end"] = params.end
+        }
+        if (params.upper) {
+            args["upper"] = params.upper
+        }
+        if (params.lower) {
+            args["lower"] = params.lower
+        }
+        
+        if (params.collab_orgs.length > 0) {
+            var orgs = ""
+            for (var i = 0; i < params.collab_orgs.length; i++) {
+                if (i > 0) {
+                    orgs += ","
+                }
+                orgs += params.collab_orgs[i]
+            }
+            args["collab"] = orgs
+        }
+        
+        if (params.format) {
+            args["format"] = params.format
+        }
+        
+        return args
+    }
+    
+    ///////////////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////////////////////////
+    
+    // actually go and build the report
+    
+    function fetchReport() {
+        var formattedParams = patchParameters({format: "json"})
+        var args = getQueryArgs(formattedParams)
+        
+        // put up a report loading message
+        reportLoading()
+        
+        // generate the report parameters first, so the user has something
+        // to look at while the report is loading
+        generateReportParameters()
+        
+        $.ajax({
+            type : "GET",
+            url: "/organisation/{{mainorg}}/collaboration",
+            dataType: "json",
+            data: args,
+            success : generateReport
+        })
+        
+        $('html, body').stop().animate({
+            scrollTop: $("#report_parameters").offset().top
+        }, 1500,'easeInOutExpo')
+    }
+    
+    function generateReportParameters() {
+        var parameters = ""
+        if (report_parameters.collab_orgs.length > 0) {
+            parameters = "<h2>showing collaborations with "
+            for (var i = 0; i < report_parameters.collab_orgs.length; i++) {
+                var org = report_parameters.collab_orgs[i]
+                if (i > 0) {
+                    parameters += ", "
+                }
+                parameters += org + " (<a href='" + getReportUrl({exclude_orgs: [org]}) + "' class='reporturl' data-exclude-orgs='" + org + "'>X</a>)"
+            }
+            parameters += "</h2>"
+        }
+        
+        if (report_parameters.funder) {
+            parameters += "<h2>showing work funded by " + report_parameters.funder + " (<a href='" + getReportUrl({exclude_funder : true}) + "' class='reporturl' data-exclude-funder='true'>X</a>)</h2>"
+        }
+        
+        if (report_parameters.collab_orgs.length === 0 && report_parameters.funder === undefined) {
+            parameters += "<h2>showing all collaborations</h2>"
+        }
+        
+        $("#report_parameters").html(parameters)
+    }
+    
+    function generateReport(report) {
+        
+        var rows = report.rows
+        var summary = ""
+        if (rows.length > 0) {
+            var plural = report.count > 0 ? "s" : ""
+            summary = "<h2>" + (report.facets.collaborators.terms.length - 1) + " collaborators " +
+                        "over " + report.count + " project" + plural + " " +
+                        "totalling £" + report.facets.value_stats.formatted_total + " in funding</h2>"
+        }
+        else {
+            summary = "<h2>No results</h2>"
+        }
+        
+        var csv = '<div class="row-fluid"> \
+                <div class="span12" style="text-align: right"><a href="' + getReportUrl({format : "csv"}) + '">download as csv</a></div> \
+            </div>'
+            
+        var table = '<table id="collaborations" class="tablesorter"> \
+                <thead> \
+                    <tr> \
+                        <th>Collaborator</th> \
+                        <th>Project Title</th> \
+                        <th>Collaboration Size</th> \
+                        <th>Funding</th> \
+                        <th>Funder</th> \
+                        <th>Award Ref</th> \
+                        <th>Start Date</th> \
+                        <th>End Date</th> \
+                    </tr> \
+                </thead> \
+                <tbody>'
+        for (var j = 0; j < report.rows.length; j++) {
+            row = report.rows[j]
+            table += "<tr>"
+            table += "<td><a data-add-orgs='" + row.collaborator + "' class='reporturl' href='" + getReportUrl({add_orgs : [row.collaborator]}) + "'>" + row.collaborator + "</a></td>"
+            table += "<td><a href='/organisation/project/" + row.pid + "?org={{ mainorg }}'>" + row.projectTitle + "</a></td>"
+            table += "<td>" + row.collaborationSize + "</td>"
+            table += "<td>£" + row.formattedProjectValue + "</td>"
+            table += "<td><a class='reporturl' href='" + getReportUrl({add_funder : row.funder}) + "' data-add-funder='" + row.funder + "'>" + row.funder + "</a></td>"
+            table += "<td>" + row.awardRef + "</td>"
+            table += "<td>" + row.startDate + "</td>"
+            table += "<td>" + row.endDate + "</td>"
+            table += "</tr>"
+        }
+        
+        if (report.rows.length === 0) {
+            table += "<tr><td colspan='8'>Your report parameters did not yield any collaborations</td></tr>"
+        }
+        
+        table += "</tbody></table>"
+        
+        // now we need to generate the pull-down list facets for collaborating organisations and funders
+        var frag = '<option value="">Add a collaborator ...</option>'
+        for (var i = 0; i < report.facets.collaborators.terms.length; i++) {
+            var term = report.facets.collaborators.terms[i]
+            
+            // skip any term that is the mainorg or already in the report
+            if (term.term === report_parameters.mainorg || $.inArray(term.term, report_parameters.collab_orgs) > -1) {
+                continue
+            }
+            
+            var plural = term.count > 1 ? "s" : ""
+            frag += "<option value='" + term.term + "'>" + term.term + 
+                    "&nbsp;&mdash;&nbsp;" + term.count + " project" + plural + " totalling £" + 
+                    term.formatted_total + "</option>"
+        }
+        $("select[name=collab]").html(frag)
+        
+        if (report_parameters.funder) {
+            frag = '<option value="">Select a funder ...</option>'
+            $("select[name=funder]").html(frag)
+            $("select[name=funder]").attr("disabled", "disabled")
+        }
+        else {
+            frag = '<option value="">Select a funder ...</option>'
+            for (var i = 0; i < report.facets.funders.terms.length; i++) {
+                var term = report.facets.funders.terms[i]
+                var plural = term.count > 1 ? "s" : ""
+                frag += "<option value='" + term.term + "'>" + term.term + 
+                        "&nbsp;&mdash;&nbsp;" + term.count + " project" + plural + " totalling £" + 
+                        term.formatted_total + "</option>"
+            }
+            $("select[name=funder]").html(frag)
+            $("select[name=funder]").removeAttr("disabled")
+        }
+        
+        $("#report_container").html(summary + csv + table)
+        $("#collaborations").tablesorter()
+        
+        // re-initialise the report url handling
+        $(".reporturl").unbind()
+        $(".reporturl").click(reportUrlClick)
+    }
+    
+    ///////////////////////////////////////////////////////////////////
+    
+    ///////////////////////////////////////////////////////////////////
+    // page initialisation
+    
+    $("#report_controls").hide()
+    $("#report_parameters").hide()
+    $("#report_container").hide()
+    $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
+    
+    ///////////////////////////////////////////////////////////////////
+    
 }); 
 </script>
 
+<div class="row-fluid">
+    <div class="span9">
+        <h1>Collaboration Report for {{ mainorg }}</h1>
+    </div>
+    <div class="span3">
+        <button class="btn btn-primary" id="view_all_collaborations">View Full Collaboration Report &gt;</button>
+    </div>
+</div>
 
-<h1>Collaboration Report for {{ mainorg }}</h1>
+<div class="row-fluid" style="border-top: 1px solid #cccccc; margin-top: 15px; padding-top: 15px">
+    <div class="span6">
+        <h2>Top 
+        <select name="collaboration_highlight_count" style="width: 50px; font-weight: bold">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+        </select>
+        Collaborations</h2>
+    </div>
+    <div class="span6">
+        <select name="highlight_collab">
+            <option value="">Loading collaborators ...</option>
+        </select>
+        <button class="btn btn-primary" disabled="disabled" id="view_report_button_collab">View Collaboration Report &gt;</button>
+    </div>
+</div>
 
-<p>Collaboration reports only show you projects and funding amounts where your organisation has collaborated with one or more other organisations.  They do not show you projects where you were funded alone.</p>
-
-
-{% if collab_orgs|length > 0 %}
-    <h2>showing collaborations with 
-    {% for org in collab_orgs %}
-        {{org}} (<a href="#" class="reporturl" data-exclude-orgs="{{org}}">X</a>)
-        {% if not loop.last %}, {% endif %}
-    {% endfor %}</h2>
-{% endif %}
-{% if funder %}
-    <h2>showing work funded by {{ funder }} (<a href="#" class="reporturl" data-exclude-funder="true">X</a>)</h2>
-{% endif %}
-<br><br>
+<div class="row-fluid" style="border-bottom: 1px dotted #cccccc; margin-bottom: 15px; padding-bottom: 15px;">
+    <div class="span6" id="collaboration_highlight_table_container">
+        <strong style="color: #cccccc; font-size: 150%; padding: 40px; margin-top: 40px;">Loading top collaborations ...</strong>
+    </div>
+    <div class="span6" id="collaboration_highlight_graph_container" style="padding-top: 40px">
+        <div id="collab_graph_controls"></div>
+        <svg></svg>
+    </div>
+</div>
 
 <div class="row-fluid">
+    <div class="span6">
+        <h2>Funders of Collaborative Projects</h2>
+    </div>
+    <div class="span6">
+        <select name="highlight_funder">
+            <option value="">Loading funders ...</option>
+        </select>
+        <button class="btn btn-primary" disabled="disabled" id="view_report_button_funder">View Collaboration Report &gt;</button>
+    </div>
+</div>
+
+<div class="row-fluid" style="border-bottom: 1px dotted #cccccc; margin-bottom: 15px; padding-bottom: 15px;">
+    <div class="span6" id="funder_highlight_table_container">
+        <strong style="color: #cccccc; font-size: 150%; padding: 40px">Loading funders ...</strong>
+    </div>
+    <div class="span6" id="funder_highlight_graph_container" style="padding-top: 40px">
+        <div id="funder_graph_controls"></div>
+        <svg></svg>
+    </div>
+</div>
+
+<div class="row-fluid">
+    <div id="report_parameters" class="span12"></div>
+</div>
+
+<div id="report_controls" class="row-fluid">
     <div class="span12">
         <div class="well">
             <h3>Report Options</h3>
             <form method="GET" action="">
-                <!-- hidden fields -->
-                <input type="hidden" name="org" value="{{mainorg}}">
-                <input type="hidden" name="collab" value="{{collab_orgs|join(',')}}">
                 
                 <!-- date selector -->
-                <p>Projects active between: <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
+                <p>Projects active between: <input type="text" class="datepicker" name="start" placeholder="enter date"/> and 
+                <input type="text" class="datepicker" name="end" placeholder="enter date"></p>
                 
                 <!-- project value selector -->
-                <p>Projects with a funded value between: <input type="text" name="lower" value="{% if lower %}{{lower}}{% endif %}"> and <input type="text" name="upper" value="{% if upper %}{{ upper }}{% endif %}"></p>
+                <p>Projects with a funded value between: <input type="text" name="lower" placeholder="lower value"> and 
+                <input type="text" name="upper" placeholder="upper value"></p>
                 
                 <!-- collaborator facet -->
-                <p>Collaborators: <select name="collab1"> <!-- bit of a fudge, better option required, probably through real JS UI -->
+                <p>Collaborators: <select name="collab"> <!-- bit of a fudge, better option required, probably through real JS UI -->
                     <option value="">Add a collaborator ...</option>
-                    {% for f in facets.collaborators.terms %}
-                        {% if f.term != mainorg and f.term not in collab_orgs %}
-                            <option value="{{f.term}}">{{f.term}}&nbsp;&mdash;&nbsp;{{f.count}} project{% if f.count > 1 %}s{% endif %} totalling £{{ f.formatted_total }}</option>
-                        {% endif %}
-                    {% endfor %}
                 </select>
                 
                 <!-- funder facet -->
                 Funder: <select name="funder">
                     <option value="">Select a funder ...</option>
-                    {% for f in facets.funders.terms %}
-                    <option value="{{ f.term }}" {% if f.term == funder %} selected="selected" {%endif%}>{{ f.term }}&nbsp;&mdash;&nbsp;{{f.count}} project{% if f.count > 1 %}s{% endif %} totalling £{{ f.formatted_total }}</option>
-                    {% endfor %}
                 </select>
                 </p>
                 
-                <input type="submit" name="submit_options" value="Update">
+                <button class="btn btn-primary" id="update_report_options">Update the report &gt;</button>
             </form>
         </div>
     </div>
 </div>
 
-{% if report|length > 0 %}
-    <h2>
-        {{ facets.collaborators.terms|length - 1 }} collaborators 
-        over {{count}} project{% if count > 1 %}s{% endif %}
-        totalling £{{ facets.value_stats.formatted_total }} in funding
-    </h2>
-{% else %}
-    <h2>No results</h2>
-{% endif %}
-
 <div class="row-fluid">
-    <div class="span12" style="text-align: right"><a href="#" class="reporturl" data-format="csv">download as csv</a></div>
+    <div id="report_container" class="span12">
+        <strong style="color: #cccccc; font-size: 150%; padding: 40px">Loading report...</strong>
+    </div>
 </div>
-
-    <table id="collaborations" class="tablesorter">
-    <thead>
-        <tr>
-            <th>Collaborator</th>
-            <th>Project Title</th>
-            <th>Collaboration Size</th>
-            <th>Funding</th>
-            <th>Funder</th>
-            <th>Award Ref</th>
-            <th>Start Date</th>
-            <th>End Date</th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for row in report %}
-        <tr>
-            <td><a data-add-orgs="{{row['collaborator']}}" class="reporturl" href="#">{{ row['collaborator'] }}</a></td>
-            <td><a href="/organisation/project/{{row['data']['id']}}?org={{ mainorg }}">{{ row['projectTitle'] }}</a></td>
-            <td>{{ row['collaborationSize'] }}</td>
-            <td>£{{ row['projectValue'] }}</td>
-            <td><a class="reporturl" href="#" data-add-funder="{{row['funder']}}">{{ row['funder'] }}</a></td>
-            <td>{{ row['awardRef'] }}</td>
-            <td>{{ row['startDate'] }}</td>
-            <td>{{ row['endDate'] }}</td>
-        </tr>
-    {% endfor %}
-    {% if report|length == 0 %}
-        <tr><td colspan="8">Your report parameters did not yield any collaborations</td></tr>
-    {% endif %}
-    </tbody>
-    </table>
     
 {% endblock %}

@@ -4,6 +4,7 @@ from flask.ext.login import current_user
 import portality.util as util
 from portality.core import app
 import portality.models as models
+import portality.g4hemodels as gmodels
 
 from copy import deepcopy
 import json, csv, StringIO, time
@@ -335,90 +336,92 @@ b_group_template = {
 	}
 }
 
+def _make_csv(name, headers, rows):
+    output = StringIO.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    resp = make_response(output.getvalue())
+    resp.mimetype = "text/csv"
+    resp.headers['Content-Disposition'] = 'attachment; filename="' + name + '.csv"'
+    return resp
 
 # collaboration report
 ######################################################################
 
+@blueprint.route("/<mainorg>/collaboration/top")
+@blueprint.route("/<mainorg>/collaboration/top.<form>")
+def top(mainorg=None, form="json"):
+    # extract the values from the request
+    count = int(request.values.get("count", 0))
+    
+    # pass the parameters to the Collaboration model
+    c = gmodels.Collaboration()
+    top_collabs = c.ordered_collaborators(mainorg, count)
+    
+    # make the response and send it back
+    if form == "json":
+        resp = make_response(json.dumps(top_collabs))
+        resp.mimetype = "application/json"
+        return resp
+    
+    elif form == "csv":
+        headers = ["organisation", "number of collaborative projects", "total value of collaborative projects"]
+        rows = []
+        for row in top_collabs:
+            rows.append([row['term'], row['count'], row['total']])
+            
+        return _make_csv(mainorg + " Collaborators", headers, rows)
+
+@blueprint.route("/<mainorg>/collaboration/funders")
+@blueprint.route("/<mainorg>/collaboration/funders.<form>")
+def funders(mainorg=None, form="json"):
+    c = gmodels.Collaboration()
+    funders = c.ordered_funders(mainorg)
+    
+    if form == "json":
+        resp = make_response(json.dumps(funders))
+        resp.mimetype = "application/json"
+        return resp
+    
+    elif form == "csv":
+        headers = ["funder", "number of collaborative projects funded", "total value of collaborative projects funded"]
+        rows = []
+        for row in funders:
+            rows.append([row['term'], row['count'], row['total']])
+            
+        return _make_csv(mainorg + " Collaboration Funders", headers, rows)
+
 @blueprint.route('/<mainorg>/collaboration')
 def collaboration(mainorg=None):
-    q = deepcopy(query_template)
             
+    # allowable parameters of the report
+    funder = request.values.get("funder")
+    start = request.values.get("start")
+    end = request.values.get("end")
+    lower = request.values.get("lower")
+    upper = request.values.get("upper")
     collab_orgs = []
-    funder = None
-    result_format = "html"
-    start = None
-    end = None
-    lower = None
-    upper = None
+    result_format = request.values.get("format", "html")
     
-    if mainorg is not None:
-        qo = deepcopy(query_org_template)
-        qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-        q['query']['filtered']['query']['bool']['must'].append(qo)
-    
-    for k,v in request.values.items():
-        if k == "org":
-            mainorg = v
-            qo = deepcopy(query_org_template)
-            qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-            q['query']['filtered']['query']['bool']['must'].append(qo)
-            
+    for k, v in request.values.items():
         if k.startswith("collab"):
             orgs = v.split(",")
-            for org in orgs:
-                if org == "" or org is None:
-                    continue
-                qo = deepcopy(query_org_template)
-                qo['term']["collaboratorOrganisation.canonical.exact"] = org
-                q['query']['filtered']['query']['bool']['must'].append(qo)
-                collab_orgs.append(org)
-                
-        if k == "funder":
-            funder = v
-            if funder != "" and funder is not None:
-                qf = deepcopy(query_funder_template)
-                qf['term']['primaryFunder.name.exact'] = funder
-                q['query']['filtered']['query']['bool']['must'].append(qf)
-        
-        if k == "format":
-            result_format = v
-            
-        if k == "start":
-            start = v
-            if start != "" and start is not None:
-                qs = deepcopy(query_start_template)
-                qs['range']['project.fund.end']['from'] = start
-                q['query']['filtered']['query']['bool']['must'].append(qs)
-        
-        if k == "end":
-            end = v
-            if end != "" and end is not None:
-                qe = deepcopy(query_end_template)
-                qe['range']['project.fund.start']['to'] = end
-                q['query']['filtered']['query']['bool']['must'].append(qe)
-                
-        if k == "lower":
-            lower = v
-            if lower != "" and lower is not None:
-                ql = deepcopy(query_lower_template)
-                ql['range']['project.fund.valuePounds']['from'] = lower
-                q['query']['filtered']['query']['bool']['must'].append(ql)
-        
-        if k == "upper":
-            upper = v
-            if upper != "" and upper is not None:
-                qu = deepcopy(query_upper_template)
-                qu['range']['project.fund.valuePounds']['to'] = upper
-                q['query']['filtered']['query']['bool']['must'].append(qu)
-
-    print mainorg
+            collab_orgs += orgs
     
-    print json.dumps(q)
+    # if we've been asked for the landing page for the collaboration report,
+    # don't bother doing any of the hard work
+    if (result_format == "html" and funder is None and start is None and
+            end is None and lower is None and upper is None and len(collab_orgs) == 0):
+        return render_template('collab/collab.html', mainorg=mainorg, report=None)
     
-    result = models.Record.query(q=q)
-    projects = [i.get("_source") for i in result.get("hits", {}).get("hits", [])]
-    facets = result.get("facets", {})
-    count = result.get("hits", {}).get("total", 0)
+    c = gmodels.Collaboration()
+    projects, facets, count = c.collaboration_report(mainorg, 
+                                funder=funder, collab_orgs=collab_orgs,
+                                start=start, end=end, 
+                                lower=lower, upper=upper)
+    
     
     # format the numbers in the facets
     for f in facets.get("collaborators", {}).get("terms"):
@@ -429,6 +432,7 @@ def collaboration(mainorg=None):
     for f in facets.get("funders", {}).get("terms"):
         f['formatted_total'] = "{:,.0f}".format(f['total'])
     
+    # generate the report rows
     report = []
     for p in projects:
         for co in p.get("collaboratorOrganisation", []):
@@ -436,31 +440,38 @@ def collaboration(mainorg=None):
             if co.get("canonical") == mainorg:
                 continue
             
-            row = {"data" : p}
+            row = {}
+            row["pid"] = p.get("id")
             row['collaborator'] = co.get("canonical")
             row['projectTitle'] = p.get("project", {}).get("title", "untitled")
             row['projectValue'] = p.get("project", {}).get("fund", {}).get("valuePounds", 0)
+            row['formattedProjectValue'] = "{:,.0f}".format(row["projectValue"])
             row['collaborationSize'] = len(p.get("collaboratorOrganisation", []))
-            row['collaboratorRelationship'] = "FIXME"
             row['awardRef'] = p.get("project", {}).get("grantReference", "unknown")
             row['funder'] = p.get("primaryFunder", {}).get("name", "unknown")
-            row['principalInvestigator'] = "FIXME"
-            row['coInvestigator'] = "FIXME"
             row['startDate'] = p.get("project", {}).get("fund", {}).get("start")
             row['endDate'] = p.get("project", {}).get("fund", {}).get("end")
             report.append(row)
     
+    data = {
+        "rows" : report,
+        "facets" : facets,
+        "count" : count
+    }
+    
     if result_format == "html":
-        return render_template('collab/collab.html', mainorg=mainorg, collab_orgs=collab_orgs, funder=funder, report=report, start=start, end=end, facets=facets, lower=lower, upper=upper, count=count)
+        return render_template('collab/collab.html', mainorg=mainorg, report=data)
+    
     elif result_format == "csv":
-        output = StringIO.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["collaborator", "project title", "collaboration size", "funding", "funder", "award ref", "start date", "end date"])
+        headers = ["collaborator", "project title", "collaboration size", "funding", "funder", "award ref", "start date", "end date"]
+        rows = []
         for row in report:
-            writer.writerow([row['collaborator'], row['projectTitle'], row['collaborationSize'], row['projectValue'], row['funder'], row['awardRef'], row['startDate'], row['endDate']])
-        resp = make_response(output.getvalue())
-        resp.mimetype = "text/csv"
-        resp.headers['Content-Disposition'] = 'attachment; filename="' + mainorg + '_collaboration_report.csv"'
+            rows.append([row['collaborator'], row['projectTitle'], row['collaborationSize'], row['projectValue'], row['funder'], row['awardRef'], row['startDate'], row['endDate']])
+        return _make_csv(mainorg + " Collaborations Report", headers, rows)
+        
+    elif result_format == "json":
+        resp = make_response(json.dumps(data))
+        resp.mimetype = "application/json"
         return resp
     
     abort(406)
@@ -479,131 +490,3 @@ def project(pid=None):
     
     return render_template("collab/project.html", mainorg=mainorg, project=project)
     
-query_org_template = {
-    "term" : {"collaboratorOrganisation.canonical.exact" : None}
-}
-
-query_funder_template = {
-    "term" : {"primaryFunder.name.exact" : None}
-}
-
-# I know these two look like they're the wrong way round, but they are not.
-query_end_template = {
-    "range" : {
-        "project.fund.start" : {
-            "to" : "<end of range>"
-        }
-    }
-}
-
-query_start_template = {
-    "range" : {
-        "project.fund.end" : {
-            "from" : "<start of range>"
-        }
-    }
-}
-
-query_lower_template = {
-    "range" : {
-        "project.fund.valuePounds" : {
-            "from" : "<lower limit of funding>"
-        }
-    }
-}
-
-query_upper_template = {
-    "range" : {
-        "project.fund.valuePounds" : {
-            "to" : "<upper limit of funding>"
-        }
-    }
-}
-
-# includes a very large size, so that we can get the data for all collaborations in one hit
-query_template = {
-    "query" : {
-        "filtered": {
-            "query" : {
-                "bool" : {
-                    "must" : []
-                }
-            },
-            "filter" : {
-                "script" : {
-                    "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
-                }
-            }
-        }
-    },
-    "size" : 10000,
-    "facets" : {
-        "collaborators" : {
-            "terms_stats" : {
-                "key_field" : "collaboratorOrganisation.canonical.exact",
-                "value_field" : "project.fund.valuePounds",
-                "size" : 0
-            }
-        },
-        "funders" : {
-            "terms_stats" : {
-                "key_field" : "primaryFunder.name.exact",
-                "value_field" : "project.fund.valuePounds",
-                "size" : 0
-            }
-        },
-        "value_stats" : {
-            "statistical" : {
-                "field" : "project.fund.valuePounds"
-            }
-        }
-    }
-}
-
-
-'''
-{
-    "query" : {
-	"filtered" : {
-      "query": {
-          "bool": {
-              "must": [
-                  {
-                      "term": {
-                          "collaboratorOrganisation.canonical.exact": "Brunel University"
-                      }
-                  }
-              ]
-          }
-      },
-      "filter" : {
-          "script" : {
-              "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
-          }
-      }
-    }
-    }, 
-    "facets": {
-    	"collaborators": {
-        	"terms_stats": {
-            	"value_field": "project.fund.valuePounds", 
-                "key_field": "collaboratorOrganisation.canonical.exact", 
-                "size": 0
-            }
-        },
-        "funders" : {
-            "terms_stats" : {
-                "key_field" : "primaryFunder.name.exact",
-                "value_field" : "project.fund.valuePounds",
-                "size" : 0
-            }
-        },
-        "stat1" : {
-            "statistical" : {
-                "field" : "project.fund.valuePounds"
-            }
-        }
-    }, 
-    "size": 10}
-}
-'''
