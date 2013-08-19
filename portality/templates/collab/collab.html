@@ -146,7 +146,8 @@ $(document).ready(function() {
         
         frag += "</tbody></table>"
         
-        var help = "<p>Click on an organisation to see the projects you collaborated with them on and who the other collaborators were.</p>"
+        var help = "<p>Click on an organisation to see the projects you collaborated with them on and who the other collaborators were.  Or, select an organisation from the " +
+                    "pull-down menu on the right to be taken to the report.</p>"
         
         var csv = '<div class="row-fluid"> \
                     <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/top.csv">download full csv</a></div> \
@@ -276,7 +277,8 @@ $(document).ready(function() {
         
         frag += "</tbody></table>"
         
-        var help = "<p>Click on the funder name to see projects they funded and your collaborators where you collaborated with one or more organisations</p>"
+        var help = "<p>Click on the funder name to see projects they funded and your collaborators where you collaborated with one or more organisations.  Or, " +
+                    "select a funder from the pull-down on the right to be taken to the report</p>"
         
         var csv = '<div class="row-fluid"> \
                     <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/funders.csv">download full csv</a></div> \
@@ -804,6 +806,12 @@ $(document).ready(function() {
             summary = "<h2>No results</h2>"
         }
         
+        var desc = "<p>This report provides you with one row per project per collaborator (which is any organisation which was the Lead Research Organisaton, Fellow, " +
+                    "Principal Investigator or Co-Investigator).  This means each project will appear multiple times, and you will " +
+                    "see each collaborator appear once per project.</p>" +
+                    "<p>The <strong>total project funding</strong> shown is the amount the project as a whole was funded, and not the incomes for the individual " +
+                    "collaborators on the project</p>"
+        
         var csv = '<div class="row-fluid"> \
                 <div class="span12" style="text-align: right"><a href="' + getReportUrl({format : "csv"}) + '">download as csv</a></div> \
             </div>'
@@ -813,12 +821,12 @@ $(document).ready(function() {
                     <tr> \
                         <th>Collaborator</th> \
                         <th>Project Title</th> \
-                        <th>Collaboration Size</th> \
-                        <th>Funding</th> \
+                        <th>Number of Project Collaborators</th> \
+                        <th>Total Project Funding</th> \
                         <th>Funder</th> \
                         <th>Award Ref</th> \
-                        <th>Start Date</th> \
-                        <th>End Date</th> \
+                        <th>Project Start Date</th> \
+                        <th>Project End Date</th> \
                     </tr> \
                 </thead> \
                 <tbody>'
@@ -877,7 +885,7 @@ $(document).ready(function() {
             $("select[name=funder]").removeAttr("disabled")
         }
         
-        $("#report_container").html(summary + csv + table)
+        $("#report_container").html(summary + desc + csv + table)
         $("#collaborations").tablesorter()
         
         // re-initialise the report url handling
@@ -903,6 +911,8 @@ $(document).ready(function() {
 <div class="row-fluid">
     <div class="span9">
         <h1>Collaboration Report for {{ mainorg }}</h1>
+        <p>Collaboration reports show you organisations with whom {{mainorg}} collaborated on one or more projects.  The collaborating organisations on a project are defined as
+        those who are the <strong>Lead Research Organisation</strong>, a <strong>Fellow</strong> on the project, or the host for the <strong>Principal Investigator</strong> or one or more of the <strong>Co-Investigators</strong>.</p>
     </div>
     <div class="span3">
         <button class="btn btn-primary" id="view_all_collaborations">View Full Collaboration Report &gt;</button>
@@ -974,8 +984,8 @@ $(document).ready(function() {
                 <input type="text" class="datepicker" name="end" placeholder="enter date"></p>
                 
                 <!-- project value selector -->
-                <p>Projects with a funded value between: <input type="text" name="lower" placeholder="lower value"> and 
-                <input type="text" name="upper" placeholder="upper value"></p>
+                <p>Projects with a funded value between: <strong>£</strong>&nbsp;<input type="text" name="lower" placeholder="lower value" style="width: 100px"> and 
+                <strong>£</strong>&nbsp;<input type="text" name="upper" placeholder="upper value" style="width: 100px"></p>
                 
                 <!-- collaborator facet -->
                 <p>Collaborators: <select name="collab"> <!-- bit of a fudge, better option required, probably through real JS UI -->

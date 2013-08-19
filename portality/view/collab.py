@@ -463,7 +463,7 @@ def collaboration(mainorg=None):
         return render_template('collab/collab.html', mainorg=mainorg, report=data)
     
     elif result_format == "csv":
-        headers = ["collaborator", "project title", "collaboration size", "funding", "funder", "award ref", "start date", "end date"]
+        headers = ["collaborator", "project title", "number of project collaborators", "total project funding", "funder", "award ref", "project start date", "project end date"]
         rows = []
         for row in report:
             rows.append([row['collaborator'], row['projectTitle'], row['collaborationSize'], row['projectValue'], row['funder'], row['awardRef'], row['startDate'], row['endDate']])
