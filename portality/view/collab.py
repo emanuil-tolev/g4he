@@ -337,6 +337,60 @@ b_group_template = {
 	}
 }
 
+#############################################################################
+
+# more templates - these can be removed when the benchmarking report is
+# refactored to properly encapsulate the ES connection
+
+# collaborator organisation template.
+# Used where a term query to exactly match the organisation name is needed
+#
+query_org_template = {
+    "term" : {"collaboratorOrganisation.canonical.exact" : None}
+}
+
+# funding organisation template
+# Used where a term query to exactly match the primary funder's name is needed
+
+query_funder_template = {
+    "term" : {"primaryFunder.name.exact" : None}
+}
+
+# I know these two look like they're the wrong way round, but they are not.
+query_end_template = {
+    "range" : {
+        "project.fund.start" : {
+            "to" : "<end of range>"
+        }
+    }
+}
+
+query_start_template = {
+    "range" : {
+        "project.fund.end" : {
+            "from" : "<start of range>"
+        }
+    }
+}
+
+query_lower_template = {
+    "range" : {
+        "project.fund.valuePounds" : {
+            "from" : "<lower limit of funding>"
+        }
+    }
+}
+
+query_upper_template = {
+    "range" : {
+        "project.fund.valuePounds" : {
+            "to" : "<upper limit of funding>"
+        }
+    }
+}
+
+#####################################################################
+
 def _make_csv(name, headers, rows):
     output = StringIO.StringIO()
     writer = csv.writer(output)
@@ -465,6 +519,16 @@ def collaboration(mainorg=None):
             row["formattedStartDate"] = datetime.strftime(datetime.strptime(row["startDate"], "%Y-%m-%d"), "%d/%m/%Y")
             row['endDate'] = p.get("project", {}).get("fund", {}).get("end")
             row["formattedEndDate"] = datetime.strftime(datetime.strptime(row["endDate"], "%Y-%m-%d"), "%d/%m/%Y")
+            
+            # extract the PIs (of which there should only be one)
+            pis = p.get("principalInvestigator", [])
+            if len(pis) > 0:
+                row["principalInvestigator"] = pis[0].get("person", {}).get("firstName", "") + " " + pis[0].get("person", {}).get("surname", "")
+                row["piOrganisation"] = pis[0].get("organisation", {}).get("name", "")
+            else:
+                row["principalInvestigator"] = ""
+                row["piOrganisation"] = ""
+            
             report.append(row)
     
     data = {
@@ -473,14 +537,18 @@ def collaboration(mainorg=None):
         "count" : count
     }
     
+    #FIXME: we need to do a proper treatment of the HTML version of the report with arguments - at the 
+    # moment the report is basically ignored
     if result_format == "html":
         return render_template('collab/collab.html', mainorg=mainorg, report=data)
     
     elif result_format == "csv":
-        headers = ["collaborator", "project title", "number of project collaborators", "total project funding", "funder", "award ref", "project start date", "project end date"]
+        headers = ["collaborator", "project title", "principal investigator", "pi organisation" , "number of project collaborators", "total project funding", 
+                    "funder", "award ref", "project start date", "project end date"]
         rows = []
         for row in report:
-            rows.append([row['collaborator'], row['projectTitle'], row['collaborationSize'], row['projectValue'], row['funder'], row['awardRef'], row['startDate'], row['endDate']])
+            rows.append([row['collaborator'], row['projectTitle'], row["principalInvestigator"], row["piOrganisation"], row['collaborationSize'], row['projectValue'], 
+                    row['funder'], row['awardRef'], row['startDate'], row['endDate']])
         return _make_csv(mainorg + " Collaborations Report", headers, rows)
         
     elif result_format == "json":

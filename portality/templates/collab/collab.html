@@ -711,7 +711,7 @@ $(document).ready(function() {
         if (add_orgs) {
             for (var i = 0; i < add_orgs.length; i++) {
                 var org = add_orgs[i]
-                if ($.inArray(org, patchedParams.collab_orgs) === -1) {
+                if (org !== report_parameters.mainorg && $.inArray(org, patchedParams.collab_orgs) === -1) {
                     patchedParams.collab_orgs.push(org)
                 }
             }
@@ -790,7 +790,7 @@ $(document).ready(function() {
         var first = true
         for (var arg in qargs) {
             if (!first) { q += "&" }
-            q += arg + "=" + qargs[arg]
+            q += escape(arg) + "=" + escape(qargs[arg])
             first = false
         }
         
@@ -854,6 +854,7 @@ $(document).ready(function() {
     }
     
     function synchroniseReportOptions() {
+        // FIXME: this is not complete, obviously
         if (report_parameters.start) {
             $("input[name=start]").val(report_parameters.start)
         }
@@ -929,7 +930,7 @@ $(document).ready(function() {
                         "totalling £" + report.facets.value_stats.formatted_total + " in funding</h2>"
         }
         else {
-            summary = "<h2>No results</h2>"
+            summary = "<h2>No results - you may may want to modify the report options above</h2>"
         }
         
         var desc = "<p>This report provides you with one row per project per collaborator (which is any organisation which was the Lead Research Organisaton, Fellow, " +
@@ -947,12 +948,13 @@ $(document).ready(function() {
                     <tr> \
                         <th>Collaborator</th> \
                         <th>Project Title</th> \
-                        <th>Number of Project Collaborators</th> \
-                        <th>Total Project Funding</th> \
+                        <th>Principal&nbsp;Investigator</th> \
+                        <th>Collaborators on&nbsp;Project </th> \
+                        <th>Total&nbsp;Project Funding</th> \
                         <th>Funder</th> \
-                        <th>Award Ref</th> \
-                        <th>Project Start Date</th> \
-                        <th>Project End Date</th> \
+                        <th>Award&nbsp;Ref</th> \
+                        <th>Project&nbsp;Start Date</th> \
+                        <th>Project&nbsp;End Date</th> \
                     </tr> \
                 </thead> \
                 <tbody>'
@@ -961,6 +963,8 @@ $(document).ready(function() {
             table += "<tr>"
             table += "<td><a data-add-orgs='" + row.collaborator + "' class='reporturl' href='" + getReportUrl({add_orgs : [row.collaborator]}) + "'>" + row.collaborator + "</a></td>"
             table += "<td><a href='/organisation/project/" + row.pid + "?org={{ mainorg }}'>" + row.projectTitle + "</a></td>"
+            table += "<td>" + row.principalInvestigator + "<br><em><a href='" + getReportUrl({add_orgs : [row.piOrganisation]}) + 
+                        "' class='reporturl' data-add-orgs='" + row.piOrganisation + "'>" + row.piOrganisation + "</a></em></td>"
             table += "<td>" + row.collaborationSize + "</td>"
             table += "<td>£" + row.formattedProjectValue + "</td>"
             table += "<td><a class='reporturl' href='" + getReportUrl({add_funder : row.funder}) + "' data-add-funder='" + row.funder + "'>" + row.funder + "</a></td>"
@@ -971,7 +975,7 @@ $(document).ready(function() {
         }
         
         if (report.rows.length === 0) {
-            table += "<tr><td colspan='8'>Your report parameters did not yield any collaborations</td></tr>"
+            table += "<tr><td colspan='9'>Your report parameters did not yield any collaborations</td></tr>"
         }
         
         table += "</tbody></table>"
