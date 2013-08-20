@@ -557,6 +557,14 @@ $(document).ready(function() {
         $("input[name=end]").trigger("change")
     })
     
+    $("#clear_values").click(function(event) {
+        event.preventDefault()
+        $("input[name=lower]").val("")
+        $("input[name=lower]").trigger("change")
+        $("input[name=upper]").val("")
+        $("input[name=upper]").trigger("change")
+    })
+    
     $(".highlightonfilled").change(function() {
         if ($(this).val() !== "") {
             $(this).css("border", "2px solid #348C49")
@@ -619,6 +627,34 @@ $(document).ready(function() {
         var val = $.datepicker.formatDate("dd/mm/yy", now)
         $("input[name=start]").val(val)
         $("input[name=start]").trigger("change")
+    })
+    
+    $("select[name=value_shortcut]").change(function(event) {
+        var val = $(this).val()
+        if (val === "") {
+            return
+        }
+        
+        var lower = ""
+        var upper = ""
+        if (val === "100k") {
+            upper = "100000"
+        }
+        else if (val == "500k") {
+            lower = "100000"
+            upper = "500000"
+        }
+        else if (val == "1m") {
+            lower = "500000"
+            upper = "1000000"
+        }
+        else if (val == "huge") {
+            lower = "1000000"
+        }
+        $("input[name=lower]").val(lower)
+        $("input[name=lower]").trigger("change")
+        $("input[name=upper]").val(upper)
+        $("input[name=upper]").trigger("change")
     })
     
     ///////////////////////////////////////////////////////////////////
@@ -1113,10 +1149,10 @@ $(document).ready(function() {
 <div id="report_controls" class="row-fluid">
     <div class="span12">
         <div class="well">
-            <h3>Report Options</h3>
+            <h3 style="margin-bottom: 10px">Report Options</h3>
             <form method="GET" action="">
                 
-                <p><strong>projects active between</strong></p>
+                <h4 style="margin-bottom: 5px">projects active between</h4>
                 <div class="row-fluid" style="margin-bottom: 20px">
                     <div class="span8">
                         <input type="text" class="datepicker highlightonfilled" name="start" placeholder="from date (dd/mm/yyyy)" style="width: 150px"/>&nbsp;&nbsp;and&nbsp;&nbsp; 
@@ -1133,28 +1169,50 @@ $(document).ready(function() {
                     </div>
                 </div>
                 
-                {#
-                <!-- date selector -->
-                <p>Projects active between: <input type="text" class="datepicker" name="start" placeholder="enter date (dd/mm/yyyy)"/> and 
-                <input type="text" class="datepicker" name="end" placeholder="enter date (dd/mm/yyyy)"></p>
-                #}
+                <h4 style="margin-bottom: 5px">projects with a total funded value between</h4>
+                <div class="row-fluid" style="margin-bottom: 20px">
+                    <div class="span8">
+                        <strong style="font-size: 150%">£</strong>&nbsp;
+                        <input type="text" class="highlightonfilled" name="lower" placeholder="lower value" style="width: 100px">&nbsp;&nbsp;and&nbsp;&nbsp; 
+                        
+                        <strong style="font-size: 150%">£</strong>&nbsp;
+                        <input type="text" name="upper" class="highlightonfilled" placeholder="upper value" style="width: 100px">&nbsp;&nbsp;&nbsp;&nbsp;
+                        
+                        <button class="btn btn-danger" id="clear_values">Clear Values</button>
+                    </div>
+                    <div class="span4">
+                        <select name="value_shortcut">
+                            <option value="">or select a value range ...</option>
+                            <option value="100k">£0 - 100k</option>
+                            <option value="500k">£100k - 500k</option>
+                            <option value="1m">£500k - 1m</option>
+                            <option value="huge">£1m+</option>
+                        </select>
+                    </div>
+                </div>
                 
-                <!-- project value selector -->
-                <p>Projects with a funded value between: <strong>£</strong>&nbsp;<input type="text" class="highlightonfilled" name="lower" placeholder="lower value" style="width: 100px"> and 
-                <strong>£</strong>&nbsp;<input type="text" name="upper" class="highlightonfilled" placeholder="upper value" style="width: 100px"></p>
+                <h4 style="margin-bottom: 5px">select collaborators or funders to limit results by</h4>
+                <div class="row-fluid">
+                    <div class="span6">
+                        <!-- collaborator facet -->
+                        Collaborators: <select name="collab"> <!-- bit of a fudge, better option required, probably through real JS UI -->
+                            <option value="">Add a collaborator ...</option>
+                        </select>
+                    </div>
+                    <div class="span6">
+                        <!-- funder facet -->
+                        Funder: <select name="funder">
+                            <option value="">Select a funder ...</option>
+                        </select>
+                    </div>
+                </div>
                 
-                <!-- collaborator facet -->
-                <p>Collaborators: <select name="collab"> <!-- bit of a fudge, better option required, probably through real JS UI -->
-                    <option value="">Add a collaborator ...</option>
-                </select>
-                
-                <!-- funder facet -->
-                Funder: <select name="funder">
-                    <option value="">Select a funder ...</option>
-                </select>
-                </p>
-                
-                <button class="btn btn-primary" id="update_report_options">Update the report &gt;</button>
+                <div class="row-fluid">
+                    <div class="span10">&nbsp;</div>
+                    <div class="span2">
+                        <button class="btn btn-primary" id="update_report_options">Update the report &gt;</button>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
