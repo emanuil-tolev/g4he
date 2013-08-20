@@ -322,6 +322,7 @@ $(document).ready(function() {
     ///////////////////////////////////////////////////////////////////
     
     ///////////////////////////////////////////////////////////////////
+    
     // handling the hightlight & report urls and buttons
     
     function reportLoading() {
@@ -343,10 +344,19 @@ $(document).ready(function() {
         // see if there is a funder to add
         add_funder = $(this).attr("data-add-funder")
         
+        // report shows only active projects
+        d = new Date()
+        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        
         setParameters({
             collab_orgs : add_orgs,
-            funder : add_funder
+            funder : add_funder,
+            start: ds
         })
+        
+        // we've set the parameters, some of which affect the report options
+        // form, so we need to sync it
+        synchroniseReportOptions()
         
         // ensure all the bits are on display
         $("#report_parameters").show();
@@ -407,9 +417,18 @@ $(document).ready(function() {
             return
         }
         
+        // report shows only active projects
+        d = new Date()
+        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        
         setParameters({
-            collab_orgs : [org]
+            collab_orgs : [org],
+            start: ds
         })
+        
+        // we've set the parameters, some of which affect the report options
+        // form, so we need to sync it
+        synchroniseReportOptions()
         
         // ensure all the bits are on display
         $("#report_parameters").show();
@@ -427,9 +446,18 @@ $(document).ready(function() {
             return
         }
         
+        // report shows only active projects
+        d = new Date()
+        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        
         setParameters({
-            funder : funder
+            funder : funder,
+            start: ds
         })
+        
+        // we've set the parameters, some of which affect the report options
+        // form, so we need to sync it
+        synchroniseReportOptions()
         
         // ensure all the bits are on display
         $("#report_parameters").show();
@@ -447,8 +475,26 @@ $(document).ready(function() {
         $("#report_controls").show();
         $("#report_container").show()
         
+        // report shows only active projects
+        d = new Date()
+        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        
+        setParameters({
+            start: ds
+        })
+        
+        // we've set the parameters, some of which affect the report options
+        // form, so we need to sync it
+        synchroniseReportOptions()
+        
         fetchReport()
     })
+    
+    ////////////////////////////////////////////////////////////////////////////////
+    
+    //////////////////////////////////////////////////////////////////////////////
+    
+    // Report Options form handling
     
     $("#update_report_options").click(function(event) {
         event.preventDefault()
@@ -500,9 +546,79 @@ $(document).ready(function() {
         
         updateReportParams(param_patch)
         
-        alert(JSON.stringify(report_parameters))
-        
         fetchReport()
+    })
+    
+    $("#clear_dates").click(function(event) {
+        event.preventDefault()
+        $("input[name=start]").val("")
+        $("input[name=start]").trigger("change")
+        $("input[name=end]").val("")
+        $("input[name=end]").trigger("change")
+    })
+    
+    $(".highlightonfilled").change(function() {
+        if ($(this).val() !== "") {
+            $(this).css("border", "2px solid #348C49")
+        }
+        else {
+            $(this).css("border", "1px solid #CCC")
+        }
+    })
+    
+    $("input[name=start]").change(function() {
+        if ($(this).val() === "") {
+            $("input[name=end]").datepicker("option", "defaultDate", 0)
+        }
+        else {
+            var val = $(this).val()
+            
+            // get the 3 interesting dates: the date in the start box,
+            // the date today, and the date 1 year after the start box
+            var start = $.datepicker.parseDate("dd/mm/yy", val)
+            var now = new Date()
+            var future = new Date(start.getTime())
+            future.setYear(future.getFullYear() + 1)
+        
+            var end = undefined
+            if (now < future) {
+                end = now
+            }
+            else {
+                end = future
+            }
+            
+            $("input[name=end]").datepicker("option", "defaultDate", end)
+        }
+    })
+    
+    $("select[name=date_shortcut]").change(function(event) {
+        var val = $(this).val()
+        if (val === "") {
+            return
+        }
+        var now = new Date()
+        if (val === "calendar_year") {
+            now.setDate(1)
+            now.setMonth(0) // month - 1 because of stupid zero indexing
+        }
+        else if (val === "academic_year") {
+            var ay = new Date(now.getFullYear(), "08", "01") // month - 1 because of stupid zero indexing
+            if (now < ay) {
+                ay.setYear(ay.getFullYear() - 1)
+            }
+            now = ay
+        }
+        else if (val === "tax_year") {
+            var fy = new Date(now.getFullYear(), "03", "01") // month - 1 because of stupid zero indexing
+            if (now < fy) {
+                fy.setYear(fy.getFullYear() - 1)
+            }
+            now = fy
+        }
+        var val = $.datepicker.formatDate("dd/mm/yy", now)
+        $("input[name=start]").val(val)
+        $("input[name=start]").trigger("change")
     })
     
     ///////////////////////////////////////////////////////////////////
@@ -737,6 +853,16 @@ $(document).ready(function() {
         return args
     }
     
+    function synchroniseReportOptions() {
+        if (report_parameters.start) {
+            $("input[name=start]").val(report_parameters.start)
+        }
+        else {
+            $("input[name=start]").val("")
+        }
+        $("input[name=start]").trigger("change")
+    }
+    
     ///////////////////////////////////////////////////////////////////////////
     
     ///////////////////////////////////////////////////////////////////////////
@@ -839,8 +965,8 @@ $(document).ready(function() {
             table += "<td>£" + row.formattedProjectValue + "</td>"
             table += "<td><a class='reporturl' href='" + getReportUrl({add_funder : row.funder}) + "' data-add-funder='" + row.funder + "'>" + row.funder + "</a></td>"
             table += "<td>" + row.awardRef + "</td>"
-            table += "<td>" + row.startDate + "</td>"
-            table += "<td>" + row.endDate + "</td>"
+            table += "<td>" + row.formattedStartDate + "</td>"
+            table += "<td>" + row.formattedEndDate + "</td>"
             table += "</tr>"
         }
         
@@ -901,7 +1027,14 @@ $(document).ready(function() {
     $("#report_controls").hide()
     $("#report_parameters").hide()
     $("#report_container").hide()
-    $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
+    $(".datepicker").datepicker({
+        inline: true,
+        dateFormat: 'dd/mm/yy',
+        changeYear: true,
+        yearRange: "-22:+0"
+    });
+    
+    
     
     ///////////////////////////////////////////////////////////////////
     
@@ -979,13 +1112,32 @@ $(document).ready(function() {
             <h3>Report Options</h3>
             <form method="GET" action="">
                 
+                <p><strong>projects active between</strong></p>
+                <div class="row-fluid" style="margin-bottom: 20px">
+                    <div class="span8">
+                        <input type="text" class="datepicker highlightonfilled" name="start" placeholder="from date (dd/mm/yyyy)" style="width: 150px"/>&nbsp;&nbsp;and&nbsp;&nbsp; 
+                        <input type="text" class="datepicker highlightonfilled" name="end" placeholder="to date (dd/mm/yyyy)" style="width: 150px">&nbsp;&nbsp;&nbsp;&nbsp;
+                        <button class="btn btn-danger" id="clear_dates">Clear Dates</button>
+                    </div>
+                    <div class="span4">
+                        <select name="date_shortcut">
+                            <option value="">or select a date period ...</option>
+                            <option value="calendar_year">this calendar year</option>
+                            <option value="tax_year">UK corporation tax year</option>
+                            <option value="academic_year">this academic year</option>
+                        </select>
+                    </div>
+                </div>
+                
+                {#
                 <!-- date selector -->
-                <p>Projects active between: <input type="text" class="datepicker" name="start" placeholder="enter date"/> and 
-                <input type="text" class="datepicker" name="end" placeholder="enter date"></p>
+                <p>Projects active between: <input type="text" class="datepicker" name="start" placeholder="enter date (dd/mm/yyyy)"/> and 
+                <input type="text" class="datepicker" name="end" placeholder="enter date (dd/mm/yyyy)"></p>
+                #}
                 
                 <!-- project value selector -->
-                <p>Projects with a funded value between: <strong>£</strong>&nbsp;<input type="text" name="lower" placeholder="lower value" style="width: 100px"> and 
-                <strong>£</strong>&nbsp;<input type="text" name="upper" placeholder="upper value" style="width: 100px"></p>
+                <p>Projects with a funded value between: <strong>£</strong>&nbsp;<input type="text" class="highlightonfilled" name="lower" placeholder="lower value" style="width: 100px"> and 
+                <strong>£</strong>&nbsp;<input type="text" name="upper" class="highlightonfilled" placeholder="upper value" style="width: 100px"></p>
                 
                 <!-- collaborator facet -->
                 <p>Collaborators: <select name="collab"> <!-- bit of a fudge, better option required, probably through real JS UI -->

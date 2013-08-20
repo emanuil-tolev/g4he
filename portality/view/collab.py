@@ -6,6 +6,7 @@ from portality.core import app
 import portality.models as models
 import portality.g4hemodels as gmodels
 
+from datetime import datetime
 from copy import deepcopy
 import json, csv, StringIO, time
 
@@ -410,6 +411,17 @@ def collaboration(mainorg=None):
             orgs = v.split(",")
             collab_orgs += orgs
     
+    # we want the start and end dates in a nice big-endian format, so we 
+    # may need to rejig them
+    try:
+        if start is not None:
+            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
+        if end is not None:
+            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
+    except ValueError:
+        # do nothing, it's fine
+        pass
+    
     # if we've been asked for the landing page for the collaboration report,
     # don't bother doing any of the hard work
     if (result_format == "html" and funder is None and start is None and
@@ -450,7 +462,9 @@ def collaboration(mainorg=None):
             row['awardRef'] = p.get("project", {}).get("grantReference", "unknown")
             row['funder'] = p.get("primaryFunder", {}).get("name", "unknown")
             row['startDate'] = p.get("project", {}).get("fund", {}).get("start")
+            row["formattedStartDate"] = datetime.strftime(datetime.strptime(row["startDate"], "%Y-%m-%d"), "%d/%m/%Y")
             row['endDate'] = p.get("project", {}).get("fund", {}).get("end")
+            row["formattedEndDate"] = datetime.strftime(datetime.strptime(row["endDate"], "%Y-%m-%d"), "%d/%m/%Y")
             report.append(row)
     
     data = {
