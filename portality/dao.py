@@ -11,21 +11,32 @@ You can overwrite and add to the DomainObject functions as required. See models.
     
     
 class DomainObject(UserDict.IterableUserDict):
-    __type__ = None # set the type on the model that inherits this
+    __type__ = "" # set the type on the model that inherits this
+
+    # set index connections data
+    HOST = str(app.config.get('ELASTIC_SEARCH_HOST','http://localhost:9200'))
+    INDEX = str(app.config['ELASTIC_SEARCH_INDEX'])
+    HOSTINDEX = HOST + '/' + INDEX + '/'
+    HOSTINDEXTYPE = HOSTINDEX + __type__ + '/'
+
 
     def __init__(self, **kwargs):
+        if 'host' in kwargs:
+            cls.HOST = kwargs['host']
+        if 'index' in kwargs:
+            cls.INDEX = kwargs['index']
+
         if '_source' in kwargs:
             self.data = dict(kwargs['_source'])
             self.meta = dict(kwargs)
             del self.meta['_source']
+        elif 'data' in kwargs:
+            self.data = dict(kwargs['data'])
         else:
             self.data = dict(kwargs)
+            if 'host' in self.data: del self.data['host']
+            if 'index' in self.data: del self.data['index']
             
-    @classmethod
-    def target(cls):
-        t = str(app.config['ELASTIC_SEARCH_HOST']).rstrip('/') + '/'
-        t += app.config['ELASTIC_SEARCH_DB'] + '/' + cls.__type__ + '/'
-        return t
     
     @classmethod
     def makeid(cls):
@@ -63,7 +74,7 @@ class DomainObject(UserDict.IterableUserDict):
             except:
                 self.data['author'] = "anonymous"
 
-        r = requests.post(self.target() + self.data['id'], data=json.dumps(self.data))
+        r = requests.post(self.HOSTINDEXTYPE + self.data['id'], data=json.dumps(self.data))
 
 
     @classmethod
@@ -72,15 +83,14 @@ class DomainObject(UserDict.IterableUserDict):
         for r in bibjson_list:
             data += json.dumps( {'index':{'_id':r[idkey]}} ) + '\n'
             data += json.dumps( r ) + '\n'
-        r = requests.post(cls.target() + '_bulk', data=data)
-        if refresh:
-            cls.refresh()
+        r = requests.post(cls.HOSTINDEXTYPE + '_bulk', data=data)
+        if refresh: cls.refresh()
         return r.json()
 
 
     @classmethod
     def refresh(cls):
-        r = requests.post(cls.target() + '_refresh')
+        r = requests.post(cls.HOSTINDEX + '_refresh')
         return r.json()
 
 
@@ -90,7 +100,7 @@ class DomainObject(UserDict.IterableUserDict):
         if id_ is None:
             return None
         try:
-            out = requests.get(cls.target() + id_)
+            out = requests.get(cls.HOSTINDEXTYPE + id_)
             if out.status_code == 404:
                 return None
             else:
@@ -113,7 +123,27 @@ class DomainObject(UserDict.IterableUserDict):
                 keys = keys + cls.keys(mapping=mapping[item]['properties'],prefix=prefix+item+'.')
         keys.sort()
         return keys
-        
+
+    
+    @classmethod
+    def put_mapping(cls):
+        mapping = app.config.get("MAPPINGS",{}).get(cls.__type__,None)
+        if mapping is None:
+            return False
+        else:
+            im = HOSTINDEXTYPE + '/_mapping'
+            exists = requests.get(im)
+            if exists.status_code != 200:
+                ri = requests.post(HOSTINDEX)
+            r = requests.put(im, json.dumps(mapping))
+            return True
+
+
+    @classmethod
+    def mapping(cls):
+        return cls.query(endpoint='_mapping')[cls.__type__]
+
+
     @classmethod
     def query(cls, recid='', endpoint='_search', q='', terms=None, facets=None, **kwargs):
         '''Perform a query on backend.
@@ -161,9 +191,9 @@ class DomainObject(UserDict.IterableUserDict):
                 query[k] = v
 
         if endpoint in ['_mapping']:
-            r = requests.get(cls.target() + recid + endpoint)
+            r = requests.get(cls.HOSTINDEXTYPE + endpoint)
         else:
-            r = requests.post(cls.target() + recid + endpoint, data=json.dumps(query))
+            r = requests.post(cls.HOSTINDEXTYPE + recid + endpoint, data=json.dumps(query))
         return r.json()
 
     def accessed(self):
@@ -174,9 +204,20 @@ class DomainObject(UserDict.IterableUserDict):
         except:
             usr = "anonymous"
         self.data['last_access'].insert(0, { 'user':usr, 'date':datetime.now().strftime("%Y-%m-%d %H%M") } )
-        r = requests.put(self.target() + self.data['id'], data=json.dumps(self.data))
+        r = requests.put(self.HOSTINDEXTYPE + self.data['id'], data=json.dumps(self.data))
 
     def delete(self):        
-        r = requests.delete(self.target() + self.id)
+        r = requests.delete(self.HOSTINDEXTYPE + self.id)
+
+    @classmethod
+    def delete_type(cls):
+        r = requests.delete(self.HOSTINDEXTYPE)
+
+    @classmethod
+    def delete_index(cls):
+        r = requests.delete(self.HOSTINDEX)
+
+
+
 
 

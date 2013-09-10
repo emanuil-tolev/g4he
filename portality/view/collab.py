@@ -4,7 +4,6 @@ from flask.ext.login import current_user
 import portality.util as util
 from portality.core import app
 import portality.models as models
-import portality.g4hemodels as gmodels
 
 from datetime import datetime
 from copy import deepcopy
@@ -22,7 +21,7 @@ def organisation():
     query["facets"]["orgs"]["terms"]["script"] = "term.toLowerCase() contains '" + q.lower() + "'"
     result = models.Record.query(q=query)
     terms = result.get("facets", {}).get("orgs", {}).get("terms")
-    return make_response(json.dumps(terms))
+    return render_template('collab/orgs.html')
 
 org_search_query = {
     "query" : {
@@ -411,8 +410,8 @@ def top(mainorg=None, form="json"):
     # extract the values from the request
     count = int(request.values.get("count", 0))
     
-    # pass the parameters to the Collaboration model
-    c = gmodels.Collaboration()
+    # pass the parameters to the Record model
+    c = models.Record()
     top_collabs = c.ordered_collaborators(mainorg, count)
     
     # make the response and send it back
@@ -432,7 +431,7 @@ def top(mainorg=None, form="json"):
 @blueprint.route("/<mainorg>/collaboration/funders")
 @blueprint.route("/<mainorg>/collaboration/funders.<form>")
 def funders(mainorg=None, form="json"):
-    c = gmodels.Collaboration()
+    c = models.Record()
     funders = c.ordered_funders(mainorg)
     
     if form == "json":
@@ -482,7 +481,7 @@ def collaboration(mainorg=None):
             end is None and lower is None and upper is None and len(collab_orgs) == 0):
         return render_template('collab/collab.html', mainorg=mainorg, report=None)
     
-    c = gmodels.Collaboration()
+    c = models.Record()
     projects, facets, count = c.collaboration_report(mainorg, 
                                 funder=funder, collab_orgs=collab_orgs,
                                 start=start, end=end, 
