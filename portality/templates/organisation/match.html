@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<script type="text/javascript">
+$(document).ready(function() {
+    
+    
+}); 
+</script>
+
+<div class="row-fluid">
+    <div class="span6">
+        <h1>New Potential Report for <br><a href="/organisation/{{ org }}">{{ org }}</a></h1>
+        <p style="margin-top:10px;">The purpose of this report is to find other organisations with research funding 
+        in areas that you are interested in, that you have not previously collaborated with, 
+        and that may be worth approaching to discuss new project opportunities.</p>
+        <p>To begin, please adjust the match options on the right, so we can find good matches.</p>
+    </div>
+    <div class="span6">
+        <div class="well">
+            <h2>Match parameters</h2>
+        </div>
+    </div>
+</div>
+
+
+    
+{% endblock %}

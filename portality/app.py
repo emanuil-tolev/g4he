@@ -3,28 +3,27 @@ from flask import Flask, request, abort, render_template
 from flask.views import View
 from flask.ext.login import login_user, current_user
 
+import json
+
 import portality.models as models
 from portality.core import app, login_manager
 
-from portality.view.forms import dropdowns
 
 from portality.view.account import blueprint as account
-from portality.view.tagging import blueprint as tagging
+from portality.view.admin import blueprint as admin
 from portality.view.graph import blueprint as graph
 from portality.view.contact import blueprint as contact
 from portality.view.query import blueprint as query
 from portality.view.stream import blueprint as stream
-from portality.view.collab import blueprint as collab
-
-import json
+from portality.view.organisation import blueprint as organisation
 
 app.register_blueprint(account, url_prefix='/account')
-app.register_blueprint(tagging, url_prefix='/tagging')
+app.register_blueprint(admin, url_prefix='/admin')
 app.register_blueprint(graph, url_prefix='/graph')
 app.register_blueprint(contact, url_prefix='/contact')
 app.register_blueprint(query, url_prefix='/query')
 app.register_blueprint(stream, url_prefix='/stream')
-app.register_blueprint(collab, url_prefix="/organisation")
+app.register_blueprint(organisation, url_prefix="/organisation")
 
 
 @login_manager.user_loader
@@ -65,7 +64,7 @@ def page_not_found(e):
         
 @app.route('/')
 def index():
-    return render_template('index.html', orgs=json.dumps(dropdowns('record','collaboratorOrganisation.canonical')))
+    return render_template('index.html')
     
 
 if __name__ == "__main__":

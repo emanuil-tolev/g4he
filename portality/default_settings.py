@@ -1,4 +1,8 @@
-SECRET_KEY = "default-key" # make this something secret in your overriding app.cfg
+# ========================
+# MAIN SETTINGS
+
+# make this something secret in your overriding app.cfg
+SECRET_KEY = "default-key"
 
 # contact info
 ADMIN_NAME = "Cottage Labs LLP"
@@ -11,26 +15,20 @@ HOST = "0.0.0.0"
 DEBUG = True
 PORT = 5004
 
+# elasticsearch settings
+ELASTIC_SEARCH_HOST = "http://127.0.0.1:9200" # remember the http:// or https://
+ELASTIC_SEARCH_DB = "portality"
+INITIALISE_INDEX = True # whether or not to try creating the index and required index types on startup
+
 # list of superuser account names
 SUPER_USER = ["test"]
 
-PUBLIC_REGISTER = True # Can people register publicly? If false, only the superuser can create new accounts
-SHOW_LOGIN = True # if this is false the login link is not shown in the default template, but login is not necessarily disabled
+# Can people register publicly? If false, only the superuser can create new accounts
+PUBLIC_REGISTER = False
 
-# elasticsearch settings
-ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200"
-ELASTIC_SEARCH_INDEX = "g4he2"
-INITIALISE_INDEX = False # whether or not to try creating the index and required index types on startup
-NO_QUERY_VIA_API = ['account, config'] # list index types that should not be queryable via the API
-PUBLIC_ACCESSIBLE_JSON = True # can not logged in people get JSON versions of pages by querying for them?
 
-# if search filter is true, anonymous users only see visible and accessible pages in query results
-# if search sort and order are set, all queries from /query will return with default search unless one is provided
-# placeholder image can be used in search result displays
-ANONYMOUS_SEARCH_FILTER = False
-SEARCH_SORT = ''
-SEARCH_SORT_ORDER = ''
-
+# ========================
+# MAPPING SETTINGS
 
 # a dict of the ES mappings. identify by name, and include name as first object name
 # and identifier for how non-analyzed fields for faceting are differentiated in the mappings
@@ -57,35 +55,94 @@ MAPPINGS = {
     }
 }
 MAPPINGS['account'] = {'account':MAPPINGS['record']['record']}
+MAPPINGS['pages'] = {'pages':MAPPINGS['record']['record']}
 
-GTR_INDEX = "gtr"
-GTR_MAPPINGS = {
-    "project" : {
-        "project" : {
-            "dynamic_templates" : [
-                {
-                    "default" : {
-                        "match" : "*",
-                        "match_mapping_type": "string",
-                        "mapping" : {
-                            "type" : "multi_field",
-                            "fields" : {
-                                "{name}" : {"type" : "{dynamic_type}", "index" : "analyzed", "store" : "no"},
-                                "exact" : {"type" : "{dynamic_type}", "index" : "not_analyzed", "store" : "yes"}
-                            }
-                        }
-                    }
-                }
-            ]
-        }
+
+# ========================
+# QUERY SETTINGS
+
+# list index types that should not be queryable via the query endpoint
+NO_QUERY = ['account']
+
+# can anonymous users get raw JSON records via the query endpoint?
+PUBLIC_ACCESSIBLE_JSON = True 
+
+# list additional terms to impose on anonymous users of query endpoint
+# for each index type that you wish to have some
+# must be a list of objects that can be appended to an ES query.bool.must
+# for example [{'term':{'visible':True}},{'term':{'accessible':True}}]
+ANONYMOUS_SEARCH_TERMS = {
+    "pages": [{'term':{'visible':True}},{'term':{'accessible':True}}]
+}
+
+# a default sort to apply to query endpoint searches
+# for each index type that you wish to have one
+# for example {'created_date' + FACET_FIELD : {"order":"desc"}}
+DEFAULT_SORT = {
+    "pages": {'created_date' + FACET_FIELD : {"order":"desc"}}
+}
+
+
+# ========================
+# MEDIA SETTINGS
+
+# location of media storage folder
+MEDIA_FOLDER = "media"
+
+
+# ========================
+# PAGEMANAGER SETTINGS
+
+# folder name for storing page content
+# will be added under the templates/pagemanager route
+CONTENT_FOLDER = "content"
+
+# etherpad endpoint if available for collaborative editing
+COLLABORATIVE = 'http://localhost:9001'
+
+# when a page is deleted from the index should it also be removed from 
+# filesystem and etherpad (if they are available in the first place)
+DELETE_REMOVES_FS = False # True / False
+DELETE_REMOVES_EP = False # MUST BE THE ETHERPAD API-KEY OR DELETES WILL FAIL
+
+# disqus account shortname if available for page comments
+COMMENTS = ''
+
+
+# ========================
+# HOOK SETTINGS
+
+REPOS = {
+    "portality": {
+        "path": "/opt/portality/src/portality"
+    },
+    "content": {
+        "path": "/opt/portality/src/portality/portality/templates/pagemanager/content"
     }
 }
-GTR_MAPPINGS['person'] = {'person':GTR_MAPPINGS['project']['project']}
-GTR_MAPPINGS['organisation'] = {'organisation':GTR_MAPPINGS['project']['project']}
-GTR_MAPPINGS['publication'] = {'publication':GTR_MAPPINGS['project']['project']}
-GTR_MAPPINGS['cerifproject'] = {'cerifproject':GTR_MAPPINGS['project']['project']}
-GTR_MAPPINGS['cerifclass'] = {'cerifclass':GTR_MAPPINGS['project']['project']}
 
+# ========================
+# FEED SETTINGS
 
+BASE_URL = "http://portality.com"
 
+# Maximum number of feed entries to be given in a single response.  If this is omitted, it will
+# default to 20
+MAX_FEED_ENTRIES = 20
+
+# Maximum age of feed entries (in seconds) (default value here is 3 months).  If this is omitted
+# then we will always supply up to the MAX_FEED_ENTRIES above
+MAX_FEED_ENTRY_AGE = 7776000
+
+# Which index to run feeds from
+FEED_INDEX = "Pages"
+
+# Licensing terms for feed content
+FEED_LICENCE = "(c) Cottage Labs LLP 2012.  All content Copyheart: http://copyheart.org"
+
+# name of the feed generator (goes in the atom:generator element)
+FEED_GENERATOR = "CottageLabs feed generator"
+
+# Larger image to use as the logo for all of the feeds
+FEED_LOGO = "http://cottagelabs.com/media/cottage_hill_bubble_small.jpg"
 

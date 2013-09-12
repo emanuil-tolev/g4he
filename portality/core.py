@@ -1,7 +1,7 @@
 import os, requests, json
 from flask import Flask
 
-from portality import default_settings
+from portality import settings
 from flask.ext.login import LoginManager, current_user
 login_manager = LoginManager()
 
@@ -14,7 +14,7 @@ def create_app():
     return app
 
 def configure_app(app):
-    app.config.from_object(default_settings)
+    app.config.from_object(settings)
     # parent directory
     here = os.path.dirname(os.path.abspath( __file__ ))
     config_path = os.path.join(os.path.dirname(here), 'app.cfg')
@@ -23,7 +23,7 @@ def configure_app(app):
 
 def initialise_index(app):
     mappings = app.config["MAPPINGS"]
-    i = str(app.config['ELASTIC_SEARCH_HOST'])
+    i = str(app.config['ELASTIC_SEARCH_HOST']).rstrip('/')
     i += '/' + app.config['ELASTIC_SEARCH_DB']
     for key, mapping in mappings.iteritems():
         im = i + '/' + key + '/_mapping'

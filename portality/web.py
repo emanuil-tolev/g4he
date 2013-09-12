@@ -13,10 +13,8 @@ from flask.ext.login import login_user, current_user
 import portality.models as models
 from portality.core import app, login_manager
 
-from portality.view.wikipedia import wikiparse
 from portality.view.account import blueprint as account
 from portality.view.sitemap import blueprint as sitemap
-from portality.view.tagging import blueprint as tagging
 from portality.view.media import blueprint as media
 from portality.view.admin import blueprint as admin
 from portality.view.graph import blueprint as graph
@@ -24,15 +22,14 @@ from portality.view.contact import blueprint as contact
 from portality.view.query import blueprint as query
 from portality.view.stream import blueprint as stream
 from portality.view.package import blueprint as package
-from portality.view.padthru import blueprint as padthru
-from portality.view.search import blueprint as search
-from portality.view.jsite import blueprint as jsite
-from portality.view.collab import blueprint as collab
+from portality.view.forms import blueprint as forms
+from portality.view.pagemanager import blueprint as pagemanager
+from portality.view.feed import blueprint as feed
+from portality.view.hooks import blueprint as hooks
 
 
 app.register_blueprint(account, url_prefix='/account')
 app.register_blueprint(sitemap, url_prefix='/sitemap')
-app.register_blueprint(tagging, url_prefix='/tagging')
 app.register_blueprint(media, url_prefix='/media')
 app.register_blueprint(admin, url_prefix='/admin')
 app.register_blueprint(graph, url_prefix='/graph')
@@ -40,10 +37,10 @@ app.register_blueprint(contact, url_prefix='/contact')
 app.register_blueprint(query, url_prefix='/query')
 app.register_blueprint(stream, url_prefix='/stream')
 app.register_blueprint(package, url_prefix='/package')
-app.register_blueprint(padthru, url_prefix='/padthru')
-app.register_blueprint(search, url_prefix='/search')
-app.register_blueprint(collab, url_prefix="/collab")
-app.register_blueprint(jsite)
+app.register_blueprint(forms, url_prefix='/forms')
+app.register_blueprint(hooks, url_prefix='/hooks')
+app.register_blueprint(feed)
+app.register_blueprint(pagemanager)
 
 
 @login_manager.user_loader

@@ -5,25 +5,24 @@ from unicodedata import normalize
 from functools import wraps
 from flask import request, current_app
 
+from urlparse import urlparse, urljoin
+
 import smtplib
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEBase import MIMEBase
 from email.MIMEText import MIMEText
 from email.Utils import COMMASPACE, formatdate
 from email import Encoders
-from topia.termextract import extract
-from html2text import html2text
          
 
-def term_extractor(content):
-    # http://pypi.python.org/pypi/topia.termextract/
-    # remove html first
-    text = html2text(content)
-    extractor = extract.TermExtractor()
-    extractor.filter = extract.DefaultFilter(singleStrengthMinOccur=2)
-    terms = extractor(text)
-    return terms
-
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    if ( test_url.scheme in ('http', 'https') and 
+            ref_url.netloc == test_url.netloc ):
+        return target
+    else:
+        return '/'
 
 def send_mail(to, fro, subject, text, files=[],server="localhost"):
     assert type(to)==list
