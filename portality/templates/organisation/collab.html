@@ -998,7 +998,7 @@ $(document).ready(function() {
             row = report.rows[j]
             table += "<tr>"
             table += "<td><a data-add-orgs='" + row.collaborator + "' class='reporturl' href='" + getReportUrl({add_orgs : [row.collaborator]}) + "'>" + row.collaborator + "</a></td>"
-            table += "<td><a href='/organisation/project/" + row.pid + "?org={{ mainorg }}'>" + row.projectTitle + "</a></td>"
+            table += "<td><a href='/project/" + row.pid + "?org={{ mainorg }}'>" + row.projectTitle + "</a></td>"
             table += "<td>" + row.principalInvestigator + "<br><em><a href='" + getReportUrl({add_orgs : [row.piOrganisation]}) + 
                         "' class='reporturl' data-add-orgs='" + row.piOrganisation + "'>" + row.piOrganisation + "</a></em></td>"
             table += "<td>" + row.collaborationSize + "</td>"

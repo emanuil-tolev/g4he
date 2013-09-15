@@ -16,6 +16,7 @@ from portality.view.contact import blueprint as contact
 from portality.view.query import blueprint as query
 from portality.view.stream import blueprint as stream
 from portality.view.organisation import blueprint as organisation
+from portality.view.project import blueprint as project
 
 app.register_blueprint(account, url_prefix='/account')
 app.register_blueprint(admin, url_prefix='/admin')
@@ -24,6 +25,7 @@ app.register_blueprint(contact, url_prefix='/contact')
 app.register_blueprint(query, url_prefix='/query')
 app.register_blueprint(stream, url_prefix='/stream')
 app.register_blueprint(organisation, url_prefix="/organisation")
+app.register_blueprint(project, url_prefix="/project")
 
 
 @login_manager.user_loader

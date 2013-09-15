@@ -4,25 +4,222 @@
 
 <script type="text/javascript">
 $(document).ready(function() {
-    
-    
+
+
+var removeparam = function(event) {
+    event.preventDefault();
+    $(this).parent().remove();
+}
+
+
+$( "#projects" ).autocomplete({
+      source: function( request, response ) {
+        $.ajax({
+          url: "/stream/record/project.title?q=" + request.term,
+          dataType: "json",
+          success: function( data ) {
+            response( $.map( data, function( item ) {
+              return {
+                label: item,
+                value: item
+              }
+            }));
+          }
+        });
+      },
+      minLength: 2,
+      select: function( event, ui ) {
+        $('#params').append('<p><a class="removeparam" href="#" style="color:red;">x</a> Project: <a href="#" class="param" data-type="project">' + ui.item.label + '</a></p>');
+        $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
+        $(this).val("");
+        return false;
+      }
+    });
+
+
+$( "#people" ).autocomplete({
+      source: function( request, response ) {
+        $.ajax({
+          url: "/stream/record/collaboratorPerson.canonical?q=" + request.term,
+          dataType: "json",
+          success: function( data ) {
+            response( $.map( data, function( item ) {
+              return {
+                label: item,
+                value: item
+              }
+            }));
+          }
+        });
+      },
+      minLength: 2,
+      select: function( event, ui ) {
+        $('#params').append('<p><a class="removeparam" href="#" style="color:red;">x</a> Person: <a href="#" class="param" data-type="person">' + ui.item.label + '</a></p>');
+        $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
+        $(this).val("");
+        return false;
+      }
+    });
+
+
+var addstuff = function(event) {
+    event.preventDefault();
+    if ( $(this).hasClass('addurls') ) {
+        var valstr = $('#urls').val();
+        $('#urls').val("");
+        var vals = valstr.split(',');
+        for ( var v in vals ) {
+            $('#params').append('<p><a class="removeparam" href="#" style="color:red;">x</a> URL: <a href="#" class="param" data-type="url">' + vals[v] + '</a></p>');    
+        }
+    } else {
+        var valstr = $('#keywords').val();
+        $('#keywords').val("");
+        var vals = valstr.split(',');
+        for ( var v in vals ) {
+            $('#params').append('<p><a class="removeparam" href="#" style="color:red;">x</a> Keyword: <a href="#" class="param" data-type="keyword">' + vals[v] + '</a></p>');    
+        }
+    }
+    $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
+}
+$('.addurls').bind('click',addstuff);
+$('.addkeywords').bind('click',addstuff);
+
+
+var generate = function(event) {
+    event.preventDefault();
+    var params = {
+        keyword:[],
+        person:[],
+        url:[],
+        project:[]
+    };
+    if ( $(this).attr('id') == 'regenerate') {
+        $('.generatedkeyword').each(function() {
+            if ( !( $(this).text() in params.keyword ) ) {
+                params.keyword.push($(this).text());
+            }
+        });
+    } else {
+        $('.param').each(function() {
+            if ( !( $(this).text() in params[$(this).attr('data-type')] ) ) {
+                params[$(this).attr('data-type')].push($(this).text());
+            }
+        });
+    }
+    var loc = window.location;
+    $.ajax({
+        'url': window.location + '.json',
+        'type': 'POST',
+        'dataType': 'JSON',
+        'contentType': 'application/json',
+        'data': JSON.stringify(params),
+        'success': function(data) {
+            var basis = '<h2>Keywords</h2><div class="well marketing-first"><p>We generated and used these keywords for your matches. To restrict matches, remove some of these and re-generate (or provide completely new parameters above for a new match set).</p>'
+            for ( var i = 0; i < data.params.length; i++ ) {
+                basis += '<p><a class="removeparam" href="#" style="color:red;">x</a> <a href="#" class="generatedkeyword">' + data.params[i] + '</a></p>'; 
+            }
+            basis += '<p><a href="#" class="btn" id="regenerate">Re-generate matches</a></p></div>';
+            var matches = '<h2>Your matches</h2><table class="table table-striped table-bordered">';
+            for ( var i = 0; i < data.new_potential.length; i++ ) {
+                matches += '<tr><td>' + data.new_potential[i] + '</td></tr>';
+            }
+            matches += '</table>';
+            $('#basis').html(basis);
+            $('#matches').html(matches);
+            $('#regenerate').bind('click',generate);
+            $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
+            $('html, body').animate({
+                scrollTop: $("#basis").offset().top
+            }, 500);
+        }
+    })
+    // TODO: change this alert to an ajax call
+}
+$('#generate').bind('click',generate);
+
+
+var slider = function(event) {
+    $('#selectwell').animate({
+        marginTop: '330px'
+    }, 500);
+    $('html, body').animate({
+        scrollTop: $("#selectwell").offset().top + 300
+    }, 500);
+    $('input, select').unbind('focus',slider);
+    $('#generate').show();
+}
+$('input, select').bind('focus',slider);
+
+
 }); 
 </script>
 
 <div class="row-fluid">
-    <div class="span6">
-        <h1>New Potential Report for <br><a href="/organisation/{{ org }}">{{ org }}</a></h1>
-        <p style="margin-top:10px;">The purpose of this report is to find other organisations with research funding 
-        in areas that you are interested in, that you have not previously collaborated with, 
-        and that may be worth approaching to discuss new project opportunities.</p>
-        <p>To begin, please adjust the match options on the right, so we can find good matches.</p>
-    </div>
-    <div class="span6">
-        <div class="well">
-            <h2>Match parameters</h2>
+    <div class="span12">
+        <div class="hero-unit">
+            <h1>New Potential for <br><a href="/organisation/{{ org }}">{{ org }}</a></h1>
+            <h3>EXPERIMENTAL - RESULTS LIKELY TO BE SPURIOUS</h3>
+            <h3>TODO: we will fix the dropdown display error, we will add a loading image, and we will add further data about the value of matches with links to their work. But let us know what you think of this so far.</h3>
         </div>
     </div>
 </div>
+
+<div class="row-fluid">
+    <div class="span4">
+        <div class="well marketing-first" style="min-height:270px;">
+            <p style="margin-top:10px;">Find other organisations with research funding 
+            in areas that you are interested in, that you have not previously collaborated with, 
+            and that may be worth approaching to discuss new project opportunities.</p>
+            <p>To enable matching, please provide your preferred mixture of favourite projects, any people you are interested in working with, and any specific research keyword choices.</p>
+            <p>Also, you can provide web links to pages that contain descriptions of your research or your department, and we will mine the linked pages for relevant data.</p>
+        </div>
+        <div class="well" style="min-height:73px;">
+            <h2>Selected parameters</h2>
+            <div id="params">
+            </div>
+        </div>
+        <input type="submit" id="generate" class="btn btn-large btn-primary" value="generate a report based on the above parameters" style="width:100%;display:none;">
+    </div>
+    <div class="span8">
+        <div class="well" style="min-height:270px;" id="selectwell">
+            <!--
+            <div style="float:left;margin-right:10px;">
+                <h2>your projects</h2>
+                <select id="yourprojects">
+                    <option></option>
+                </select>
+            </div>
+            -->
+            <div style="float:left;margin-right:10px;">
+                <h2>projects</h2>
+                <input type="text" id="projects" style="width:450px;">
+            </div>
+            <div>
+                <h2>people</h2>
+                <input type="text" id="people" style="width:200px;">
+            </div>
+            <h2>preferred keywords</h2>
+            <p><input type="text" id="keywords" style="width:670px;"> <input type="submit" value="add" class="btn addkeywords" style="margin-top:-10px"></p>
+            <h2>relevant web pages</h2>
+            <p><input type="text" id="urls" style="width:670px;"> <input type="submit" value="add" class="btn addurls" style="margin-top:-10px"></p>
+        </div>
+    </div>
+</div>
+
+
+<hr></hr>
+
+<div class="row-fluid">
+    <div class="span9">
+        <div id="matches">
+        </div>
+    </div>
+    <div class="span3">
+        <div id="basis">
+        </div>
+    </div>
+</div>
+
 
 
     

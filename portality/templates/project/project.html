@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="row-fluid">
+    <div class="span12">
+        <div class="hero-unit marketing-first">
+            <h1>{{ project['project']['title'] }}</h1>
+            <p>A project led by 
+            {{ project.principalInvestigator[0].organisation.name }}
+            </p>
+        </div>
+    </div>
+</div>
+
+{% if mainorg %}
+<p><a href="/organisation/{{mainorg}}/collaboration">&laquo; return to {{mainorg}}'s collaboration report</a></p>
+{% endif %}
+
+<div class="row-fluid" style="margin-top:30px;">
+    <div class="span8">
+        <p>{{ project['project']['abstractText'] }}</p>
+    </div>
+    
+    <div class="span4">
+        <div class="well">
+            <p><strong>funded by</strong> {{ project.project.fund.funder.name }}</p>
+            <p><strong>funded amount</strong> £{{ project.project.fund.valuePounds }}</p>
+            <p><strong>date range</strong> {{ project.project.fund.start }} - {{ project.project.fund.end }}</p>
+            <p><strong>grant reference</strong> {{ project.project.grantReference }}</p>
+        </div>
+
+        <div class="well">
+        
+            <h2>Collaborators</h2>
+            {% for org in project.collaboratorOrganisation %}
+            
+                <p><strong>{{org.canonical}}</strong> - 
+                {% if org.principalInvestigator %}
+                    <em>Principal Investigator</em>
+                {% elif org.coInvestigator %}
+                    <em>Co-Investigator</em>
+                {% elif org.fellow %}
+                    <em>Fellow</em>
+                {% endif %}
+                </p>
+                
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}

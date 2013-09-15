@@ -1,12 +1,13 @@
 from flask import Blueprint, request, abort, make_response, render_template, redirect
 
+import portality.util as util
 import portality.models as models
 import portality.mine as mine
 from portality.view.forms import dropdowns
 
 from datetime import datetime
 from copy import deepcopy
-import json, csv, StringIO, time, os
+import json, csv, StringIO, time, os, requests
 
 blueprint = Blueprint('organisation', __name__)
 
@@ -25,22 +26,65 @@ def organisations():
 
 
 @blueprint.route("/<mainorg>")
+@blueprint.route("/<mainorg>.json")
 def organisation(mainorg):
+    # TODO:
     # list all this orgs projects
     # list a blurb and website about this org
     # list the main contact of this org (and perhaps other users)
     # offer ability to update the page about this org
     # show this org snapshot data, top projects, recent funding by years, pubs
-    # link to collaboration, benchmarking, anti-collaboration report
     # offer a download report overview of this org
 
     logo = mainorg.lower().replace(' ','_').replace("'",'').replace('university_','').replace('_university','').replace('_of','').replace('of_','').replace('_the','').replace('the_','').replace('_and','').replace('and_','').replace('_for','').replace('for_','').replace('_.','.') + '.png';
     
     logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
     logos=os.listdir(logofolder)
-    if logo not in logos: logo = False
+    if logo not in logos:
+        logo = ''
+    else:
+        logo = '/static/logos/' + logo
 
-    return render_template('organisation/org.html', org=mainorg, logo=logo)
+    qry = {
+        "query": {
+            "term": {
+                "collaboratorOrganisation.canonical.exact": mainorg
+            }
+        },
+        "size": 0,
+        "facets": {
+            "collaborators":{
+                "terms_stats" : {
+                    "key_field" : "collaboratorOrganisation.canonical.exact",
+                    "value_field" : "project.fund.valuePounds",
+                    "size" : 0
+                }
+            },
+            "value_stats" : {
+                "statistical" : {
+                    "field" : "project.fund.valuePounds"
+                }
+            }
+        }
+    }
+    r = models.Record.query(q=qry)
+
+    org = {
+        'name': mainorg,
+        'logo': logo,
+        'projects': r.get('hits',{}).get('total',0),
+        'collaborators': len(r.get('facets',{}).get('collaborators',{}).get('terms',[])) - 1,
+        'totalfunding': "{:,.0f}".format(r.get('facets',{}).get('value_stats',{}).get('total',0))
+    }
+
+    # TODO: should really have an org object with the above info in it and it 
+    # should be passed to the page instead of the mainorg string
+    if util.request_wants_json():
+        resp = make_response(json.dumps(org))
+        resp.mimetype = "application/json"
+        return resp
+    else:
+        return render_template('organisation/org.html', org=org)
 
 
 
@@ -49,9 +93,134 @@ def organisation(mainorg):
 #####################################################################
 
 @blueprint.route("/<mainorg>/matching", methods=["GET", "POST"])
-@blueprint.route("/<mainorg>/matching.<suffix>", methods=["GET"])
+@blueprint.route("/<mainorg>/matching.<suffix>", methods=["GET", "POST"])
 def matching(mainorg, suffix=None):
-    return render_template('organisation/match.html', org=mainorg)
+
+    # get any match parameters provided in the request
+    if request.json:
+        project = request.json.get('project',[])
+        person = request.json.get('person',[])
+        keyword = request.json.get('keyword',[])
+        url = request.json.get('url',[])
+    else:
+        project = request.values.get('project',"").split(',')
+        person = request.values.get('person',"").split(',')
+        keyword = request.values.get('keyword',"").split(',')
+        url = request.values.get('url',"").split(',')
+
+    # process the match parameters into search parameters
+    # TODO: should make this a dict by weightings and include them from below
+    # and also enable end users to prioritise certain keywords or types
+    # TODO: perhaps also add maximums from each source, or maximum length of params overall?    
+    params = []
+    for k in keyword:
+        if k not in params and len(k) > 0: params.append(k)
+
+    for pr in project:
+        # match project title to a project
+        if len(pr) > 0:
+            r = models.Record.pull_by_key('project.title',pr)
+            if r is not None:
+                extract = mine.mine_project_record(r)
+                count = 0 # TODO: proper control of how many url-extracted keywords to include
+                for e in extract:
+                    for i in extract[e]:
+                        count += 1
+                        if count <= 10:
+                            if i not in params: params.append(i.replace('(','')) # TODO: regex out anything non-az09
+
+    for u in url:
+        if len(u) > 0:
+            if not u.startswith('http://') and not u.startswith('https://'):
+                u = 'http://' + u
+            #try:
+            r = requests.get(u)
+            clean = mine.html_text(r.text)
+            extract = mine.full_extract(web_text=clean, web_weight=5)
+            count = 0 # TODO: proper control of how many url-extracted keywords to include
+            for e in extract:
+                for i in extract[e]:
+                    count += 1
+                    if count <= 10:
+                        if i not in params: params.append(i)
+            #except:
+            #    pass
+
+    collabs = []
+    # perform the search with the defined params and build a list of matching orgs
+    if len(params) > 0 or len(person) > 0:
+        qry = {
+            'query': {
+                'bool': {
+                    'must': [
+                        {
+                            'query_string': {
+                                'query': " OR ".join(params)
+                            }
+                        }
+                    ],
+                    'must_not': [
+                        {
+                            'term': {
+                                'collaboratorOrganisation.canonical.exact': mainorg
+                            }
+                        }
+                    ]
+                }
+            },
+            "facets" : {
+                "collaborators" : {
+                    "terms_stats" : {
+                        "key_field" : "collaboratorOrganisation.canonical.exact",
+                        "value_field" : "project.fund.valuePounds",
+                        "size" : 100
+                    }
+                }
+            }
+        }
+
+        # add people, if any , to the search
+        if len(person) > 0:
+            qry['query']['bool']['should'] = []
+            qry['query']['bool']['minimum_should_match'] = 1
+            for p in person:
+                if len(p) > 0:
+                    qry['query']['bool']['should'].append({
+                        'term': {
+                            'collaboratorPerson.canonical.exact': p
+                        }
+                    })
+
+        # get the collaborator orgs found in the search results
+        r = models.Record.query(q=qry)
+        collabs = [i['term'] for i in r.get("facets", {}).get("collaborators", {}).get("terms", [])]
+
+        # get all the mainorgs current collaborators and exclude them from the list
+        cs = models.Record().ordered_collaborators(mainorg=mainorg,count=10000)
+        for c in cs:
+            if c['term'] in collabs: collabs.remove(c['term'])
+
+    
+    # TODO: for each new potential collaborator, get their top info perhaps
+    # and pass back that data instead of just the collab names
+    
+    matchinfo = {
+        "new_potential": collabs,
+        "params": params,
+        "person": person,
+        "project": project,
+        "keyword": keyword,
+        "url": url
+    }
+    
+    if util.request_wants_json():
+        resp = make_response(json.dumps(matchinfo))
+        resp.mimetype = "application/json"
+        return resp
+    elif suffix == "csv":
+        pass
+    else:
+        return render_template('organisation/match.html', org=mainorg, matchinfo=matchinfo)
 
 
 
@@ -395,6 +564,9 @@ def _make_csv(name, headers, rows):
     resp.headers['Content-Disposition'] = 'attachment; filename="' + name + '.csv"'
     return resp
 
+
+
+
 # collaboration report
 ######################################################################
 
@@ -534,7 +706,12 @@ def collaboration(mainorg=None):
     # moment the report is basically ignored
     if result_format == "html":
         return render_template('organisation/collab.html', mainorg=mainorg, report=data)
-    
+
+    elif result_format == "json":
+        resp = make_response(json.dumps(data))
+        resp.mimetype = "application/json"
+        return resp
+
     elif result_format == "csv":
         headers = ["collaborator", "project title", "principal investigator", "pi organisation" , "number of project collaborators", "total project funding", 
                     "funder", "award ref", "project start date", "project end date"]
@@ -543,12 +720,7 @@ def collaboration(mainorg=None):
             rows.append([row['collaborator'], row['projectTitle'], row["principalInvestigator"], row["piOrganisation"], row['collaborationSize'], row['projectValue'], 
                     row['funder'], row['awardRef'], row['startDate'], row['endDate']])
         return _make_csv(mainorg + " Collaborations Report", headers, rows)
-        
-    elif result_format == "json":
-        resp = make_response(json.dumps(data))
-        resp.mimetype = "application/json"
-        return resp
-    
+            
     abort(406)
 
     

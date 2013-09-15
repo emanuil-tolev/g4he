@@ -33,9 +33,7 @@ def stream(index='record',key='tags',size=1000):
     if not isinstance(key,list):
         keys = key.split(',')
 
-    q = request.values.get('q','*')
-    if not q.endswith("*"): q += "*"
-    if not q.startswith("*"): q = "*" + q
+    q = request.values.get('q',"")
 
     qry = {
         'query':{'match_all':{}},
@@ -43,7 +41,17 @@ def stream(index='record',key='tags',size=1000):
         'facets':{}
     }
     for ky in keys:
-        qry['facets'][ky] = {"terms":{"field":ky+app.config['FACET_FIELD'],"order":request.values.get('order','term'), "size":request.values.get('size',size)}}
+        f = {"terms":{"field":ky+app.config['FACET_FIELD'],"order":request.values.get('order','term'), "size":request.values.get('size',size)}}
+        if q != "":
+            f['facet_filter'] = {
+                'query':{
+                    'query_string':{
+                        'query': q,
+                        'default_field': ky
+                    }
+                }
+            }
+        qry['facets'][ky] = f
     
     klass = getattr(models, index[0].capitalize() + index[1:] )
     r = klass().query(q=qry)
@@ -52,10 +60,10 @@ def stream(index='record',key='tags',size=1000):
     try:
         if request.values.get('counts',False):
             for k in keys:
-                res = res + [[i['term'],i['count']] for i in r['facets'][k]["terms"]]
+                res = res + [[i['term'],i['count']] for i in r['facets'][k]["terms"] if q.lower() in i['term'].lower()]
         else:
             for k in keys:
-                res = res + [i['term'] for i in r['facets'][k]["terms"]]
+                res = res + [i['term'] for i in r['facets'][k]["terms"] if q.lower() in i['term'].lower()]
     except:
         pass
 
