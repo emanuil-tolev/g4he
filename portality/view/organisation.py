@@ -17,12 +17,40 @@ blueprint = Blueprint('organisation', __name__)
 @blueprint.route("/")
 def organisations():
 
-    logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
-    return render_template(
-        'organisation/orgs.html',
-        logos=sorted(os.listdir(logofolder)),
-        orgs=json.dumps(dropdowns('record','collaboratorOrganisation.canonical'))
-    )
+    if 'q' in request.values:
+        r = models.Record.query(q={
+            'query': {
+                'match_all': {}
+            },
+            'size': 0,
+            'facets': {
+                'orgs': {
+                    'terms': {
+                        'field': 'collaboratorOrganisation.canonical.exact'                        
+                    },
+                    'facet_filter': {
+                        'query':{
+                            'query_string':{
+                                'query': '*' + request.values['q'] + '*',
+                                'default_field': 'collaboratorOrganisation.canonical'
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        resp = make_response(json.dumps(r['facets']['orgs']['terms']))
+        resp.mimetype = "application/json"
+        return resp
+        
+    else:
+
+        logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
+        return render_template(
+            'organisation/orgs.html',
+            logos=sorted(os.listdir(logofolder)),
+            orgs=json.dumps(dropdowns('record','collaboratorOrganisation.canonical'))
+        )
 
 
 @blueprint.route("/<mainorg>")
