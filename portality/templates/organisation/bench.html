@@ -180,7 +180,7 @@ $(document).ready(function() {
                         var d = new Date(millis)
                         var year = d.getFullYear()
                         var month = d.getMonth()
-                        var q = month < 3 ? "Q1" : month < 6 ? "Q2" : month < 9 ? "Q3" : "Q4" // month is 0 indexed
+                        var q = month < 3 ? "Q1 (Jan - Mar)" : month < 6 ? "Q2 (Apr - Jun)" : month < 9 ? "Q3 (Jul - Sept)" : "Q4 (Oct - Dec)" // month is 0 indexed
                         return year + " " + q
                     },
         "year" : function(millis) { return $.datepicker.formatDate("yy", new Date(millis)) }
@@ -441,17 +441,17 @@ $(document).ready(function() {
     
         <h3>Report Options</h3>
         
-        <p>Report on: <input type="radio" name="report_type" value="num_projects" checked="checked" id="num_projects">&nbsp;number of projects&nbsp;&nbsp;&nbsp;&nbsp;
+        <p>Report on: <input type="radio" name="report_type" value="num_projects" checked="checked" id="num_projects">&nbsp;number of projects awarded&nbsp;&nbsp;&nbsp;&nbsp;
         <input type="radio" name="report_type" value="award_value" id="award_value">&nbsp;total amount awarded&nbsp;&nbsp;&nbsp;&nbsp;
         <input type="radio" name="report_type" value="publications" id="publications">&nbsp;number of publications</p>
         
         <p><span id="range_intro">For projects that start between</span> <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
         
-        <p>With granularity
+        <p>shown
         <select name="granularity">
-            <option value="month">monthly</option>
-            <option value="quarter" selected="selected">quarterly</option>
-            <option value="year">yearly</option>
+            <option value="month">by month</option>
+            <option value="quarter" selected="selected">by quarters</option>
+            <option value="year">by year</option>
         </select></p>
     
     </div></div>
