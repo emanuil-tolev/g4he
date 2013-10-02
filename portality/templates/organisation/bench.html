@@ -2,6 +2,14 @@
 
 {% block content %}
 
+<style>
+
+#chart svg {
+  height: 500px;
+}
+
+</style>
+
 <script type="text/javascript">
 
 $(document).ready(function() {
@@ -118,6 +126,47 @@ $(document).ready(function() {
         return table;
     }
     
+    function doGraph(params) {
+        var orgs = params.orgs
+        var rows = params.rows
+        var date_formatter = params.date_formatter
+        
+        var values = {}
+        for (var i = 0; i < orgs.length; i++) {
+            values[orgs[i]] = []
+        }
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i]
+            var date = date_formatter(row[0], true)
+            for (var j = 1; j < row.length; j++) {
+                var val = row[j]
+                var org = orgs[j-1]
+                values[org].push({x : date, y: val})
+            }
+        }
+        
+        var data = []
+        for (var org in values) {
+            data.push({key: org, values : values[org]})
+        }
+        
+        nv.addGraph(function() {
+            var chart = nv.models.multiBarChart()
+                .margin({top: 30, right: 100, bottom: 50, left: 100});
+
+            chart.yAxis
+                .tickFormat(d3.format(',.0f'));
+
+            d3.select('#chart svg')
+              .datum(data)
+              .transition().duration(500).call(chart);
+
+            nv.utils.windowResize(chart.update);
+
+            return chart;
+        });
+    }
+    
     //////////////////////////////////////////////////////////////
     
     //////////////////////////////////////////////////////////////
@@ -137,6 +186,13 @@ $(document).ready(function() {
                 rows: row_data.rows,
                 date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
             })
+        
+        // generate the graph
+        doGraph({
+            orgs: row_data.orgs,
+            rows: row_data.rows,
+            date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
+        })
         
         var header = "<h2>comparing number of projects with " + (row_data.orgs.length - 1) + " other organisations/groups over " + row_data.dates.length + " time periods</h2>"
         
@@ -167,6 +223,13 @@ $(document).ready(function() {
                 date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
             })
         
+        // generate the graph
+        doGraph({
+            orgs: row_data.orgs,
+            rows: row_data.rows,
+            date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
+        })
+        
         var header = "<h2>comparing award values with " + (row_data.orgs.length - 1) + " other organisations/groups over " + row_data.dates.length + " time periods</h2>"
         
         var description = "<p>This report shows the sum of all amounts awarded to projects each organisation/group was involved in (through the PI, Co-I, or as the Lead " +
@@ -194,6 +257,13 @@ $(document).ready(function() {
                 date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
             })
         
+        // generate the graph
+        doGraph({
+            orgs: row_data.orgs,
+            rows: row_data.rows,
+            date_formatter : dateFunctions[benchmark["parameters"]["granularity"]]
+        })
+        
         var header = "<h2>comparing number of publications with " + (row_data.orgs.length - 1) + " other organisations/groups over " + row_data.dates.length + " time periods</h2>"
         
         var description = "<p>This report shows the number of publications issued by projects each organisation/group was involed in (through the PI, Co-I, or as the " + 
@@ -217,11 +287,17 @@ $(document).ready(function() {
     
     var dateFunctions = {
         "month" : function(millis) { return $.datepicker.formatDate("mm-yy", new Date(millis)) },
-        "quarter" : function(millis) {
+        "quarter" : function(millis, shortform) {
                         var d = new Date(millis)
                         var year = d.getFullYear()
                         var month = d.getMonth()
-                        var q = month < 3 ? "Q1 (Jan - Mar)" : month < 6 ? "Q2 (Apr - Jun)" : month < 9 ? "Q3 (Jul - Sept)" : "Q4 (Oct - Dec)" // month is 0 indexed
+                        var q = ""
+                        if (shortform) {
+                            q = month < 3 ? "Q1" : month < 6 ? "Q2" : month < 9 ? "Q3" : "Q4" // month is 0 indexed
+                        }
+                        else {
+                            q = month < 3 ? "Q1 (Jan - Mar)" : month < 6 ? "Q2 (Apr - Jun)" : month < 9 ? "Q3 (Jul - Sept)" : "Q4 (Oct - Dec)" // month is 0 indexed
+                        }
                         return year + " " + q
                     },
         "year" : function(millis) { return $.datepicker.formatDate("yy", new Date(millis)) }
@@ -245,9 +321,10 @@ $(document).ready(function() {
                         '<div class="span12" style="text-align: right"><a href="' + csv_url + '" id="reporturl" data-format="csv">download as csv</a></div>' +
                     '</div>'
             
-            frag += report.table
+            // frag += report.table
             
-            $("#report").html(frag)
+            $("#report_intro").html(frag)
+            $("#tabular_report").html(report.table)
             $("#report_table").tablesorter()
         }
     }
@@ -627,6 +704,8 @@ $(document).ready(function() {
     </div></div>
 </div>
 
-<div id="report"></div>
+<div id="report_intro"></div>
+<div id="chart"><svg></svg></div>
+<div id="tabular_report"></div>
 
 {% endblock %}
