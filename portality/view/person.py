@@ -15,27 +15,24 @@ blueprint = Blueprint('person', __name__)
 def person(pid=""):
 
     if 'q' in request.values:
-        r = models.Record.query(q={
-            'query': {
-                'match_all': {}
+        query = {
+            "query" : {
+                "query_string" : {
+                    "query" : "collaboratorPerson.canonical:*" + request.values['q'] + "*"
+                }
             },
-            'size': 0,
-            'facets': {
-                'persons': {
-                    'terms': {
-                        'field': 'collaboratorPerson.canonical.exact'                        
-                    },
-                    'facet_filter': {
-                        'query':{
-                            'query_string':{
-                                'query': '*' + request.values['q'] + '*',
-                                'default_field': 'collaboratorPerson.canonical'
-                            }
-                        }
+            "size" : 0,
+            "facets" : {
+                "persons" : {
+                    "terms" : {
+                        "field" : "collaboratorPerson.canonical.exact",
+                        "size" : 25,
+                        "script" : "term.toLowerCase() contains '" + request.values['q'].lower() + "'"
                     }
                 }
             }
-        })
+        }
+        r = models.Record.query(q=query)
         resp = make_response(json.dumps(r['facets']['persons']['terms']))
         resp.mimetype = "application/json"
         return resp
