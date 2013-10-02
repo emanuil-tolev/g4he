@@ -226,7 +226,12 @@ $(document).ready(function() {
         $("#range_intro").html("For publications published between")
     });
     
-    $(".datepicker").datepicker({ dateFormat: "yy-mm-dd" });
+    $(".datepicker").datepicker({
+        inline: true,
+        dateFormat: 'dd/mm/yy',
+        changeYear: true,
+        yearRange: "-22:+0"
+    });
     
     function getReportOptions() {
         
@@ -430,6 +435,82 @@ $(document).ready(function() {
     $("#compare_to_group_container").hide()
     $("#create_group_link").click(groupForm)
     
+    ///////////////////////////////////////////////////////////////////////////////
+    
+    // report options form handling
+    
+    $("#clear_dates").click(function(event) {
+        event.preventDefault()
+        $("input[name=start]").val("")
+        $("input[name=start]").trigger("change")
+        $("input[name=end]").val("")
+        $("input[name=end]").trigger("change")
+    })
+    
+    $(".highlightonfilled").change(function() {
+        if ($(this).val() !== "") {
+            $(this).css("border", "2px solid #348C49")
+        }
+        else {
+            $(this).css("border", "1px solid #CCC")
+        }
+    })
+    
+    $("input[name=start]").change(function() {
+        if ($(this).val() === "") {
+            $("input[name=end]").datepicker("option", "defaultDate", 0)
+        }
+        else {
+            var val = $(this).val()
+            
+            // get the 3 interesting dates: the date in the start box,
+            // the date today, and the date 1 year after the start box
+            var start = $.datepicker.parseDate("dd/mm/yy", val)
+            var now = new Date()
+            var future = new Date(start.getTime())
+            future.setYear(future.getFullYear() + 1)
+        
+            var end = undefined
+            if (now < future) {
+                end = now
+            }
+            else {
+                end = future
+            }
+            
+            $("input[name=end]").datepicker("option", "defaultDate", end)
+        }
+    })
+    
+    $("select[name=date_shortcut]").change(function(event) {
+        var val = $(this).val()
+        if (val === "") {
+            return
+        }
+        var now = new Date()
+        if (val === "calendar_year") {
+            now.setDate(1)
+            now.setMonth(0) // month - 1 because of stupid zero indexing
+        }
+        else if (val === "academic_year") {
+            var ay = new Date(now.getFullYear(), "08", "01") // month - 1 because of stupid zero indexing
+            if (now < ay) {
+                ay.setYear(ay.getFullYear() - 1)
+            }
+            now = ay
+        }
+        else if (val === "tax_year") {
+            var fy = new Date(now.getFullYear(), "03", "01") // month - 1 because of stupid zero indexing
+            if (now < fy) {
+                fy.setYear(fy.getFullYear() - 1)
+            }
+            now = fy
+        }
+        var val = $.datepicker.formatDate("dd/mm/yy", now)
+        $("input[name=start]").val(val)
+        $("input[name=start]").trigger("change")
+    })
+    
 });
 
 </script>
@@ -445,7 +526,27 @@ $(document).ready(function() {
         <input type="radio" name="report_type" value="award_value" id="award_value">&nbsp;total amount awarded&nbsp;&nbsp;&nbsp;&nbsp;
         <input type="radio" name="report_type" value="publications" id="publications">&nbsp;number of publications</p>
         
-        <p><span id="range_intro">For projects that start between</span> <input type="text" class="datepicker" name="start" value="{% if start %}{{start}}{% endif %}"/> and <input type="text" class="datepicker" name="end" value="{% if end %}{{end}}{% endif %}"></p>
+        
+        <div class="row-fluid" style="margin-bottom: 20px">
+            <div class="span8">
+                <span id="range_intro">For projects that start between</span>
+                <input type="text" class="datepicker highlightonfilled" name="start" value="{% if start %}{{start}}{% endif %}" placeholder="from date (dd/mm/yyyy)" style="width: 150px"/>&nbsp;&nbsp;and&nbsp;&nbsp; 
+                <input type="text" class="datepicker highlightonfilled" name="end" value="{% if end %}{{end}}{% endif %}" placeholder="to date (dd/mm/yyyy)" style="width: 150px">&nbsp;&nbsp;&nbsp;&nbsp;
+                <button class="btn btn-danger" id="clear_dates">Clear Dates</button>
+            </div>
+            <div class="span4">
+                <select name="date_shortcut">
+                    <option value="">or select a date period ...</option>
+                    <option value="calendar_year">this calendar year</option>
+                    <option value="tax_year">UK corporation tax year</option>
+                    <option value="academic_year">this academic year</option>
+                </select>
+            </div>
+        </div>
+        
+        {#
+        <p><span id="range_intro">For projects that start between</span> <input type="text" class="datepicker highlightonfilled" name="start" value="{% if start %}{{start}}{% endif %}" placeholder="from date (dd/mm/yyyy)" style="width: 150px"/> and <input type="text" class="datepicker highlightonfilled" name="end" value="{% if end %}{{end}}{% endif %}" placeholder="to date (dd/mm/yyyy)" style="width: 150px">&nbsp;&nbsp;&nbsp;&nbsp;<button class="btn btn-danger" id="clear_dates">Clear Dates</button></p>
+        #}
         
         <p>shown
         <select name="granularity">

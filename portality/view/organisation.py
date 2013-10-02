@@ -419,15 +419,27 @@ def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
 def _valueCountReport(mainorg, j, benchmark):
     q = deepcopy(valuecount_query_template)
     
+    start = j.get("start")
+    end = j.get("end")
+    
+    try:
+        if start is not None:
+            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
+        if end is not None:
+            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
+    except ValueError:
+        # do nothing, it's fine
+        pass
+    
     # build in the standard parts of the query
     if j.get("start", "") != "":
         qs = deepcopy(b_query_start_template)
-        qs['range']['project.fund.start']['from'] = j.get("start")
+        qs['range']['project.fund.start']['from'] = start
         q['query']['bool']['must'].append(qs)
     
     if j.get("end", "") != "":
         qe = deepcopy(b_query_end_template)
-        qe['range']['project.fund.start']['to'] = j.get("end")
+        qe['range']['project.fund.start']['to'] = end
         q['query']['bool']['must'].append(qe)
     
     if j.get("granularity", "") != "":
@@ -440,6 +452,7 @@ def _valueCountReport(mainorg, j, benchmark):
         qo = deepcopy(query_org_template)
         qo['term']["collaboratorOrganisation.canonical.exact"] = o
         org_query['query']['bool']['must'].append(qo)
+        print json.dumps(org_query)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
         
