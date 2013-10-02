@@ -103,6 +103,12 @@ class Record(DomainObject):
             t['formatted_total'] = "{:,.0f}".format(t['total'])
         
         return terms
+        
+    def all_funders(self):
+        q = deepcopy(all_funders_template)
+        result = self.query(q=q)
+        terms = result.get("facets", {}).get("funders", {}).get("terms", [])
+        return terms
 
     def collaboration_report(self, mainorg, funder=None, collab_orgs=[], start=None, end=None, lower=None, upper=None):
         q = deepcopy(query_template)
@@ -248,7 +254,20 @@ query_template = {
     }
 }
 
-
+all_funders_template = {
+    "query" : {
+        "match_all" : {}
+    },
+    "size" : 0,
+    "facets" : {
+        "funders" : {
+            "terms" : {
+                "field" : "primaryFunder.name.exact",
+                "all_terms" : True
+            }
+        }
+    }
+}
 
 
 # The account object, which requires the further additional imports

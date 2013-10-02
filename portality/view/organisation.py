@@ -261,6 +261,14 @@ def matching(mainorg, suffix=None):
 # benchmarking report
 #####################################################################
 
+@blueprint.route("/<mainorg>/allfunders")
+def allfunders(mainorg=None):
+    c = models.Record()
+    funders = c.all_funders()
+    resp = make_response(json.dumps(funders))
+    resp.mimetype = "application/json"
+    return resp
+
 @blueprint.route("/<mainorg>/benchmarking", methods=["GET", "POST"])
 @blueprint.route("/<mainorg>/benchmarking.<suffix>", methods=["GET"])
 def benchmarking(mainorg=None, suffix=None):
@@ -369,6 +377,11 @@ def _publicationsReport(mainorg, j, benchmark):
         if j.get("granularity") in ["month", "quarter", "year"]:
             q['facets']['publication_dates']['date_histogram']['interval'] = j.get("granularity")
     
+    if j.get("funder", "") != "":
+        qf = deepcopy(query_funder_template)
+        qf["term"]["primaryFunder.name.exact"] = j.get("funder")
+        q['query']['bool']['must'].append(qf)
+    
     lower_time = -1 if j.get("start", "") == "" else int(time.mktime(time.strptime(j.get("start"), "%Y-%m-%d"))) * 1000
     upper_time = -1 if j.get("end", "") == "" else int(time.mktime(time.strptime(j.get("end"), "%Y-%m-%d"))) * 1000
     
@@ -419,6 +432,8 @@ def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
 def _valueCountReport(mainorg, j, benchmark):
     q = deepcopy(valuecount_query_template)
     
+    print j
+    
     start = j.get("start")
     end = j.get("end")
     
@@ -445,6 +460,11 @@ def _valueCountReport(mainorg, j, benchmark):
     if j.get("granularity", "") != "":
         if j.get("granularity") in ["month", "quarter", "year"]:
             q['facets']['award_values']['date_histogram']['interval'] = j.get("granularity")
+    
+    if j.get("funder", "") != "":
+        qf = deepcopy(query_funder_template)
+        qf["term"]["primaryFunder.name.exact"] = j.get("funder")
+        q['query']['bool']['must'].append(qf)
     
     # for each of the additional orgs, do the same query with the different org
     for o in j.get("compare_org", []):

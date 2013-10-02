@@ -6,10 +6,43 @@
 
 $(document).ready(function() {
     
+    /////////////////////////////////////////////////////////////////////////
+    
+    // utility functions
+    
     function randomID() {
         return Math.floor((Math.random()*1000000));
     }
     
+    //////////////////////////////////////////////////////////////////////////
+    
+    //////////////////////////////////////////////////////////////////////////
+    
+    // data to load onload, as it were
+    
+    function loadFunders() {
+        $.ajax({
+            type : "GET",
+            dataType: "json",
+            url: "/organisation/{{mainorg}}/allfunders",
+            success: function(data) {
+                var frag = "<option value=''>Include All Funders</option>"
+                for (var i = 0; i < data.length; i++) {
+                    frag += "<option value='" + data[i].term + "'>" + data[i].term + "</option>"
+                }
+                $("select[name=funder]").html(frag).removeAttr("disabled")
+            }
+        })
+    }
+    loadFunders()
+    
+    //////////////////////////////////////////////////////////////////////////
+    
+    //////////////////////////////////////////////////////////////////////////
+    
+    // functions for building the display
+    
+    // convert the data from the server into the data from which to construct a table
     function _getRowData(params) {
         var data = params.data ? params.data : []
         var field = params.value_field ? params.value_field : "count"
@@ -84,6 +117,12 @@ $(document).ready(function() {
         table += "</tbody></table>"
         return table;
     }
+    
+    //////////////////////////////////////////////////////////////
+    
+    //////////////////////////////////////////////////////////////
+    
+    // functions to build the different kinds of reports
     
     function numProjectsReport(benchmark) {
         // get the report data out of the benchmark response
@@ -174,6 +213,8 @@ $(document).ready(function() {
         "publications" : publicationReport
     }
     
+    ////////////////////////////////////////////////////////////////
+    
     var dateFunctions = {
         "month" : function(millis) { return $.datepicker.formatDate("mm-yy", new Date(millis)) },
         "quarter" : function(millis) {
@@ -246,8 +287,12 @@ $(document).ready(function() {
             obj["start"] = start;
         }
         var end = $("input[name=end]").val();
-        if (end && end!== "") {
+        if (end && end !== "") {
             obj["end"] = end;
+        }
+        var funder = $("select[name=funder]").val()
+        if (funder && funder !== "") {
+            obj["funder"] = funder
         }
         
         // get the comparison information for organisations
@@ -256,7 +301,7 @@ $(document).ready(function() {
             obj["compare_org"].push("{{mainorg}}")
         }
         $("span.org_record").each(function(i, e) {
-            var org = $(e).attr("data-org")
+            var org = unescape($(e).attr("data-org"))
             obj["compare_org"].push(org)
         })
         
@@ -269,12 +314,12 @@ $(document).ready(function() {
             {
                 obj["compare_groups"][gname]  = []
                 $(e).find("span.pers_record").each(function(i, e) {
-                    var pers = $(e).attr("data-pers")
+                    var pers = unescape($(e).attr("data-pers"))
                     obj["compare_groups"][gname].push(pers)
                 })
             }
         })
-        
+        // alert(JSON.stringify(obj))
         return obj
     }
     
@@ -339,7 +384,8 @@ $(document).ready(function() {
         $("#add_compare_org").click(function() {
             var org = $("#compare_to").val()
             var id = randomID()
-            var record = "<span class='org_record' style='padding-right: 5px;' id='" + id + "' data-org='" + org + "'>" + 
+            // var esc = $("<div></div>").text(org).html()
+            var record = "<span class='org_record' style='padding-right: 5px;' id='" + id + "' data-org='" + escape(org) + "'>" + 
                         org + "&nbsp;(<a href='#' class='remove_org' data-id='" + id + "'>x</a>)</span>"
             $("#comparing_to_list").append(record)
             
@@ -418,7 +464,7 @@ $(document).ready(function() {
             var clickedid = $(this).attr("data-id") // because of closure, I think
             var pers = $("#select_person_" + clickedid).val()
             var pid = randomID()
-            var record = "<span class='pers_record' style='padding-right: 5px;' id='pers_" + pid + "' data-pers='" + pers + "'>" + 
+            var record = "<span class='pers_record' style='padding-right: 5px;' id='pers_" + pid + "' data-pers='" + escape(pers) + "'>" + 
                         pers + "&nbsp;(<a href='#' class='remove_pers' data-id='" + pid + "'>x</a>)</span>"
             $("#comparing_to_group_list_" + clickedid).append(record)
             
@@ -544,15 +590,16 @@ $(document).ready(function() {
             </div>
         </div>
         
-        {#
-        <p><span id="range_intro">For projects that start between</span> <input type="text" class="datepicker highlightonfilled" name="start" value="{% if start %}{{start}}{% endif %}" placeholder="from date (dd/mm/yyyy)" style="width: 150px"/> and <input type="text" class="datepicker highlightonfilled" name="end" value="{% if end %}{{end}}{% endif %}" placeholder="to date (dd/mm/yyyy)" style="width: 150px">&nbsp;&nbsp;&nbsp;&nbsp;<button class="btn btn-danger" id="clear_dates">Clear Dates</button></p>
-        #}
-        
         <p>shown
         <select name="granularity">
             <option value="month">by month</option>
             <option value="quarter" selected="selected">by quarters</option>
             <option value="year">by year</option>
+        </select></p>
+        
+        <!-- funder facet -->
+        <p>Limit to funder: <select name="funder" disabled="disabled">
+            <option value="">Include All Funders</option>
         </select></p>
     
     </div></div>
@@ -570,10 +617,15 @@ $(document).ready(function() {
         
         <div class="row-fluid" id="add_group_box" style="padding: 10px 0px 10px 0px"><a href="#" id="create_group_link">create a group of people to benchmark</a></div>
         
+        <div class="row-fluid">
+            <div class="span10">&nbsp;</div>
+            <div class="span2">
+                <button class="btn btn-primary" id="generate">Generate the report &gt;</button>
+            </div>
+        </div>
+        
     </div></div>
 </div>
-
-<button id="generate" class="btn btn-primary">Generate the report &gt;</button>
 
 <div id="report"></div>
 
