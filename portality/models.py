@@ -109,6 +109,12 @@ class Record(DomainObject):
         result = self.query(q=q)
         terms = result.get("facets", {}).get("funders", {}).get("terms", [])
         return terms
+    
+    def grant_categories(self):
+        q = deepcopy(grant_categories_template)
+        result = self.query(q=q)
+        terms = result.get("facets", {}).get("categories", {}).get("terms", [])
+        return terms
 
     def collaboration_report(self, mainorg, funder=None, collab_orgs=[], start=None, end=None, lower=None, upper=None):
         q = deepcopy(query_template)
@@ -263,6 +269,21 @@ all_funders_template = {
         "funders" : {
             "terms" : {
                 "field" : "primaryFunder.name.exact",
+                "all_terms" : True
+            }
+        }
+    }
+}
+
+grant_categories_template = {
+    "query" : {
+        "match_all" : {}
+    },
+    "size" : 0,
+    "facets" : {
+        "categories" : {
+            "terms" : {
+                "field" : "project.grantCategory.exact",
                 "all_terms" : True
             }
         }

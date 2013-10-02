@@ -266,6 +266,14 @@ def allfunders(mainorg=None):
     resp.mimetype = "application/json"
     return resp
 
+@blueprint.route("/<mainorg>/grantcategories")
+def allfunders(mainorg=None):
+    c = models.Record()
+    funders = c.grant_categories()
+    resp = make_response(json.dumps(funders))
+    resp.mimetype = "application/json"
+    return resp
+
 @blueprint.route("/<mainorg>/benchmarking", methods=["GET", "POST"])
 @blueprint.route("/<mainorg>/benchmarking.<suffix>", methods=["GET"])
 def benchmarking(mainorg=None, suffix=None):
@@ -379,6 +387,11 @@ def _publicationsReport(mainorg, j, benchmark):
         qf["term"]["primaryFunder.name.exact"] = j.get("funder")
         q['query']['bool']['must'].append(qf)
     
+    if j.get("grantcategory", "") != "":
+        qg = deepcopy(b_grant_category_template)
+        qg["term"]["project.grantCategory.exact"] = j.get("grantcategory")
+        q['query']['bool']['must'].append(qg)
+    
     lower_time = -1 if j.get("start", "") == "" else int(time.mktime(time.strptime(j.get("start"), "%Y-%m-%d"))) * 1000
     upper_time = -1 if j.get("end", "") == "" else int(time.mktime(time.strptime(j.get("end"), "%Y-%m-%d"))) * 1000
     
@@ -467,6 +480,11 @@ def _valueCountReport(mainorg, j, benchmark):
         qf = deepcopy(query_funder_template)
         qf["term"]["primaryFunder.name.exact"] = j.get("funder")
         q['query']['bool']['must'].append(qf)
+        
+    if j.get("grantcategory", "") != "":
+        qg = deepcopy(b_grant_category_template)
+        qg["term"]["project.grantCategory.exact"] = j.get("grantcategory")
+        q['query']['bool']['must'].append(qg)
     
     # for each of the additional orgs, do the same query with the different org
     for o in j.get("compare_org", []):
@@ -495,6 +513,10 @@ def _valueCountReport(mainorg, j, benchmark):
 
 leadro_template = {
     "term" : {"leadRo.name.exact" : None}
+}
+
+b_grant_category_template = {
+    "term" : {"project.grantCategory.exact" : None}
 }
 
 publications_query_template = {

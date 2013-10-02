@@ -44,6 +44,22 @@ $(document).ready(function() {
     }
     loadFunders()
     
+    function loadGrantCategories() {
+        $.ajax({
+            type : "GET",
+            dataType: "json",
+            url: "/organisation/{{mainorg}}/grantcategories",
+            success: function(data) {
+                var frag = "<option value=''>Include All Categories</option>"
+                for (var i = 0; i < data.length; i++) {
+                    frag += "<option value='" + data[i].term + "'>" + data[i].term + "</option>"
+                }
+                $("select[name=grantcategory]").html(frag).removeAttr("disabled")
+            }
+        })
+    }
+    loadGrantCategories()
+    
     //////////////////////////////////////////////////////////////////////////
     
     //////////////////////////////////////////////////////////////////////////
@@ -371,6 +387,10 @@ $(document).ready(function() {
         if (funder && funder !== "") {
             obj["funder"] = funder
         }
+        var cat = $("select[name=grantcategory]").val()
+        if (cat && cat !== "") {
+            obj["grantcategory"] = cat
+        }
         
         // are we only looking for projects where the org is the lead?
         var leadonly = $("input[name=leadro]").is(":checked")
@@ -673,17 +693,17 @@ $(document).ready(function() {
             </div>
         </div>
         
+        <p>shown
+        <select name="granularity">
+            <option value="month">by month</option>
+            <option value="quarter" selected="selected">by quarters</option>
+            <option value="year">by year</option>
+        </select></p>
+        
         <div class="row-fluid">
         
             <div class="span6">
-                <p>shown
-                <select name="granularity">
-                    <option value="month">by month</option>
-                    <option value="quarter" selected="selected">by quarters</option>
-                    <option value="year">by year</option>
-                </select></p>
                 
-                <!-- funder facet -->
                 <p>Limit to funder: <select name="funder" disabled="disabled">
                     <option value="">Include All Funders</option>
                 </select></p>
@@ -691,7 +711,9 @@ $(document).ready(function() {
             
             <div class="span6">
             
-                &nbsp;
+                <p>Limit to grant category: <select name="grantcategory" disabled="disabled">
+                    <option value="">Include All Categories</option>
+                </select></p>
             
             </div>
         
