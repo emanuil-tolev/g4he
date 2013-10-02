@@ -372,6 +372,12 @@ $(document).ready(function() {
             obj["funder"] = funder
         }
         
+        // are we only looking for projects where the org is the lead?
+        var leadonly = $("input[name=leadro]").is(":checked")
+        if (leadonly) {
+            obj["leadonly"] = true
+        }
+        
         // get the comparison information for organisations
         obj["compare_org"] = []
         if ($("input[name=main_org]").is(":checked")) {
@@ -667,17 +673,29 @@ $(document).ready(function() {
             </div>
         </div>
         
-        <p>shown
-        <select name="granularity">
-            <option value="month">by month</option>
-            <option value="quarter" selected="selected">by quarters</option>
-            <option value="year">by year</option>
-        </select></p>
+        <div class="row-fluid">
         
-        <!-- funder facet -->
-        <p>Limit to funder: <select name="funder" disabled="disabled">
-            <option value="">Include All Funders</option>
-        </select></p>
+            <div class="span6">
+                <p>shown
+                <select name="granularity">
+                    <option value="month">by month</option>
+                    <option value="quarter" selected="selected">by quarters</option>
+                    <option value="year">by year</option>
+                </select></p>
+                
+                <!-- funder facet -->
+                <p>Limit to funder: <select name="funder" disabled="disabled">
+                    <option value="">Include All Funders</option>
+                </select></p>
+            </div>
+            
+            <div class="span6">
+            
+                &nbsp;
+            
+            </div>
+        
+        </div>
     
     </div></div>
 </div>
@@ -686,7 +704,14 @@ $(document).ready(function() {
     <div class="span12"><div class="well">
         <h3>Comparison Options</h3>
         
-        <p><input type="checkbox" value="main_org" name="main_org" checked="checked">&nbsp;Add {{mainorg}} as a whole to the report</p>
+        <div class="row-fluid">
+            <div class="span6">
+                <p><input type="checkbox" value="main_org" name="main_org" checked="checked">&nbsp;Add {{mainorg}} as a whole to the report</p>
+            </div>
+            <div class="span6">
+                <p><input type="checkbox" name="leadro" value="leadro">&nbsp;only include results where an organisation is project lead</p>
+            </div>
+        </div>
         
         <div class="row-fluid" id="org_compare" style="padding: 10px 0px 10px 0px"></div>
         

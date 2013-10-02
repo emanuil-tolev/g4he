@@ -386,7 +386,7 @@ def _publicationsReport(mainorg, j, benchmark):
     upper_time = -1 if j.get("end", "") == "" else int(time.mktime(time.strptime(j.get("end"), "%Y-%m-%d"))) * 1000
     
     for org in j.get("compare_org", []):
-        _publicationsBenchmarkOrg(q, org, lower_time, upper_time, benchmark)
+        _publicationsBenchmarkOrg(q, org, j.get("leadonly", False), lower_time, upper_time, benchmark)
     
     # for each of the groups of people do the group query
     for gname, people in j.get("compare_groups", {}).iteritems():
@@ -405,12 +405,17 @@ def _publicationsBenchmarkGroup(base_query, gname, people, lower_time, upper_tim
     
     _trimTimesAndAdd(gname, entries, lower_time, upper_time, benchmark)
 
-def _publicationsBenchmarkOrg(base_query, org, lower_time, upper_time, benchmark):
+def _publicationsBenchmarkOrg(base_query, org, leadonly, lower_time, upper_time, benchmark):
     query = deepcopy(base_query)
-    qo = deepcopy(query_org_template)
     
-    qo['term']["collaboratorOrganisation.canonical.exact"] = org
-    query['query']['bool']['must'].append(qo)
+    if leadonly:
+        qo = deepcopy(leadro_template)
+        qo['term']["leadRo.name.exact"] = org
+        query['query']['bool']['must'].append(qo)
+    else:
+        qo = deepcopy(query_org_template)
+        qo['term']["collaboratorOrganisation.canonical.exact"] = org
+        query['query']['bool']['must'].append(qo)
     
     result = models.Record.query(q=query)
     entries = result.get("facets", {}).get("publication_dates", {}).get("entries")
@@ -469,9 +474,14 @@ def _valueCountReport(mainorg, j, benchmark):
     # for each of the additional orgs, do the same query with the different org
     for o in j.get("compare_org", []):
         org_query = deepcopy(q)
-        qo = deepcopy(query_org_template)
-        qo['term']["collaboratorOrganisation.canonical.exact"] = o
-        org_query['query']['bool']['must'].append(qo)
+        if j.get("leadonly", False):
+            qo = deepcopy(leadro_template)
+            qo['term']["leadRo.name.exact"] = o
+            org_query['query']['bool']['must'].append(qo)
+        else:
+            qo = deepcopy(query_org_template)
+            qo['term']["collaboratorOrganisation.canonical.exact"] = o
+            org_query['query']['bool']['must'].append(qo)
         print json.dumps(org_query)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
@@ -485,6 +495,10 @@ def _valueCountReport(mainorg, j, benchmark):
         pers_query["query"]["bool"]["must"].append(qp)
         result = models.Record.query(q=pers_query)
         benchmark["report"][gname] = result.get("facets", {}).get("award_values", {}).get("entries")
+
+leadro_template = {
+    "term" : {"leadRo.name.exact" : None}
+}
 
 publications_query_template = {
     "query" : {
