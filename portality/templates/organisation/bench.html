@@ -8,6 +8,45 @@
   height: 500px;
 }
 
+#backplate {
+    display:none;
+    position:fixed;
+    height: 100%;
+    width: 100%;
+    top: 0;
+    left: 0;
+    opacity: 0.5;
+    z-index: 1;
+    background-color: #CCC;
+}
+
+.popup {
+    display:none;
+    position:fixed;
+    height:600px;  
+    width:800px;  
+    top:0;  
+    left:0;  
+    background:#ffffff;  
+    border:1px solid #cecece;
+    z-index:1;
+    padding: 10px;
+}
+
+.scrollarea {
+    position: absolute;
+    top: 50px;
+    overflow: auto;
+    height:570px;  
+    width:800px;
+}
+
+.close_popup {
+    position: absolute;
+    top: 10px;
+    left: 760px;
+}
+
 </style>
 
 <script type="text/javascript">
@@ -119,13 +158,30 @@ $(document).ready(function() {
         var rows = params.rows
         var value_formatter = params.value_formatter
         var date_formatter = params.date_formatter
-        var table = "<table id='report_table'><thead><th>Date</th>"
+        
+        var params = getReportOptions()
+        var data_params = " data-params=" + escape(JSON.stringify(params)) + " "
+        
+        var table = "<table id='report_table'><thead><th style='width: 50px'></th><th>Date</th>"
         for (var i = 0; i < orgs.length; i++) {
             table += "<th>" + orgs[i] + "</th>"
         }
         table += "</thead><tbody>"
         for (var i = 0; i < rows.length; i++) {
+        
+            // sort out date ranges for this row
+            var range = _getDateRange(rows, i)
+            var start = ""
+            var end = ""
+            if (range.start) {
+                start += " data-start='" + range.start + "' "
+            }
+            if (range.end) {
+                end += " data-end='" + range.end + "' "
+            }
+            
             table += "<tr>"
+            table += "<td><a href='#' class='row_details' " + start + end + data_params + ">details</a></td>"
             for (var j = 0; j < rows[i].length; j++) {
                 var val = ""
                 if (j === 0) { // this is the date field
@@ -140,6 +196,41 @@ $(document).ready(function() {
         }
         table += "</tbody></table>"
         return table;
+    }
+    
+    function _getDateRange(rows, i) {
+        var startdate = undefined
+        var enddate = undefined
+        
+        function toMillis(str) {
+            var parts = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+            alert(JSON.stringify(parts))
+            var d = new Date(parts[3], parts[2] - 1, parts[1]) // month is zero indexed
+            alert(d)
+            return d.getTime()
+        }
+        
+        if (i === 0) {
+            var s = $("input[name=start]").val();
+            if (s && s !== "") {
+                startdate = $.datepicker.formatDate("yy-mm-dd", new Date(toMillis(s)))
+            }
+        }
+        else {
+            startdate = $.datepicker.formatDate("yy-mm-dd", new Date(rows[i][0]))
+        }
+        
+        if (i + 1 < rows.length) {
+            enddate = $.datepicker.formatDate("yy-mm-dd", new Date(rows[i+1][0] - 86400000))
+        } 
+        else {
+            var s = $("input[name=end]").val();
+            if (s && s !== "") {
+                enddate = $.datepicker.formatDate("yy-mm-dd", new Date(toMillis(s)))
+            }
+        }
+        
+        return { start : startdate, end : enddate }
     }
     
     function doGraph(params) {
@@ -341,9 +432,113 @@ $(document).ready(function() {
             
             $("#report_intro").html(frag)
             $("#tabular_report").html(report.table)
-            $("#report_table").tablesorter()
+            $("#report_table").tablesorter({headers: {0 : {sorter: false}}})
+            $(".row_details").click(function(event) {
+                event.preventDefault()
+                var start = $(this).attr("data-start")
+                var end = $(this).attr("data-end")
+                var params = JSON.parse(unescape($(this).attr("data-params")))
+                params.start = start
+                params.end = end
+                
+                $.ajax({
+                    type: "POST",
+                    url: "/organisation/{{mainorg}}/benchmarking/details",
+                    contentType: "application/json",
+                    dataType: "json",
+                    data: JSON.stringify(params),
+                    success : showDetailsClosure(params)
+                })
+            })
         }
     }
+    
+    function showDetailsClosure(params) {
+        return function(data) {
+            var popuptitle = ""
+            popuptitle += "showing projects in the time period "
+            if (params.start) {
+                popuptitle += "from " + params.start + " "
+            }
+            if (params.end) {
+                popuptitle += "to " + params.end
+            }
+            
+            var frag = ""
+            for (org in data.report) {
+                frag += "<div style='padding-bottom: 10px'>"
+                var projects = data.report[org]
+                var plural = projects.length > 1 || projects.length === 0 ? "s" : ""
+                frag += "<h3>" + org + "&nbsp;&mdash;&nbsp;" + projects.length + " project" + plural + "</h3>"
+                for (var i = 0; i < projects.length; i++) {
+                    var title = projects[i].project.title
+                    var value = projects[i].project.fund.valuePounds
+                    var start = projects[i].project.fund.start
+                    frag += "<strong>" + (i+1) + ". " + title + "</strong><br>started " + start + " for £" + value + "<br>"
+                }
+                frag += "</div>"
+            }
+            popup("projects", popuptitle, frag)
+        }
+    }
+    
+    /////////////////////////////////////////////////////////////////////
+    
+    // popup window functions
+    
+    function popup(id, title, frag)
+    {
+        var frag = popupWrap(id, title, frag)
+        $("body").append('<div id="backplate"></div>')
+        $('body').append(frag)
+        centerPopup("#" + id);
+        $("#" + id).fadeIn("fast")
+        $('#backplate').click(closePopupClosure(id))
+        $('#close_popup').click(closePopupClosure(id))
+        $("#backplate").css("display", "block")
+        $(window).scroll(scrollClosure("#" + id))
+    }
+    
+    function closePopupClosure(id) {
+        return function(event) {
+            event.preventDefault()
+            $("#" + id).fadeOut("fast").remove()
+            $("#backplate").remove()
+        }
+    }
+
+    function scrollClosure(id) {
+        return function(event) {
+            centerPopup(id)
+        }
+    }
+
+    function centerPopup(popup) {  
+        //request data for centering  
+        var windowWidth = document.documentElement.clientWidth;  
+        var windowHeight = document.documentElement.clientHeight;  
+        var popupHeight = $(popup).height();  
+        var popupWidth = $(popup).width();
+        var offset = $("body").scrollTop();
+        
+        //centering  
+        $(popup).css({  
+            "position": "absolute",  
+            "top": offset + (windowHeight/2-popupHeight/2),  
+            "left": windowWidth/2-popupWidth/2  
+        });
+    }
+    
+    function popupWrap(id, title, frag) {
+        var wrapper = "<div class='popup' id='" + id + "'>"
+        // wrapper += "<div class='close_popup'><a href='#' id='close_popup'>CLOSE</a></div>"
+        wrapper += "<div class='row-fluid'><div class='span11'><strong>" + title + "</strong></div><div class='span1'><a href='#' id='close_popup'>CLOSE</a></div></div>"
+        wrapper += "<div class='scrollarea'>" + frag + "</div>"
+        wrapper += "</div>"
+        return wrapper
+    }
+
+    ////////////////////////////////////////////////////////////
     
     $("#num_projects").change(function() {
         if (!$(this).attr("checked")) { return }

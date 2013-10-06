@@ -274,6 +274,79 @@ def allfunders(mainorg=None):
     resp.mimetype = "application/json"
     return resp
 
+# FIXME: this is a near-straight copy of the valueCount report, with a different
+# query and different thing returned, but all the guts are the same.  This stuff
+# is becoming in urgent need of a refactor
+@blueprint.route("/<mainorg>/benchmarking/details", methods=["POST"])
+def details(mainorg=None):
+    j = request.json
+    benchmark = {"parameters" : j, "report" : {}}
+    
+    q = deepcopy(projects_query_template)
+    
+    start = j.get("start")
+    end = j.get("end")
+    
+    try:
+        if start is not None:
+            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
+        if end is not None:
+            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
+    except ValueError:
+        # do nothing, it's fine
+        pass
+    
+    # build in the standard parts of the query
+    if j.get("start", "") != "":
+        qs = deepcopy(b_query_start_template)
+        qs['range']['project.fund.start']['from'] = start
+        q['query']['bool']['must'].append(qs)
+    
+    if j.get("end", "") != "":
+        qe = deepcopy(b_query_end_template)
+        qe['range']['project.fund.start']['to'] = end
+        q['query']['bool']['must'].append(qe)
+    
+    if j.get("funder", "") != "":
+        qf = deepcopy(query_funder_template)
+        qf["term"]["primaryFunder.name.exact"] = j.get("funder")
+        q['query']['bool']['must'].append(qf)
+        
+    if j.get("grantcategory", "") != "":
+        qg = deepcopy(b_grant_category_template)
+        qg["term"]["project.grantCategory.exact"] = j.get("grantcategory")
+        q['query']['bool']['must'].append(qg)
+    
+    # for each of the additional orgs, do the same query with the different org
+    for o in j.get("compare_org", []):
+        org_query = deepcopy(q)
+        if j.get("leadonly", False):
+            qo = deepcopy(leadro_template)
+            qo['term']["leadRo.name.exact"] = o
+            org_query['query']['bool']['must'].append(qo)
+        else:
+            qo = deepcopy(query_org_template)
+            qo['term']["collaboratorOrganisation.canonical.exact"] = o
+            org_query['query']['bool']['must'].append(qo)
+        print json.dumps(org_query)
+        compare_result = models.Record.query(q=org_query)
+        benchmark["report"][o] = [hit.get("_source", {}) for hit in compare_result.get("hits", {}).get("hits", [])]
+        
+    # for each of the groups of people do the group query
+    for gname, people in j.get("compare_groups", {}).iteritems():
+        pers_query = deepcopy(q)
+        qp = deepcopy(b_group_template)
+        for person in people:
+            qp["terms"]["collaboratorPerson.canonical.exact"].append(person)
+        pers_query["query"]["bool"]["must"].append(qp)
+        result = models.Record.query(q=pers_query)
+        benchmark["report"][gname] = [hit.get("_source", {}) for hit in compare_result.get("hits", {}).get("hits", [])]
+    
+    # now make the response
+    resp = make_response(json.dumps(benchmark))
+    resp.mimetype = "application/json"
+    return resp
+
 @blueprint.route("/<mainorg>/benchmarking", methods=["GET", "POST"])
 @blueprint.route("/<mainorg>/benchmarking.<suffix>", methods=["GET"])
 def benchmarking(mainorg=None, suffix=None):
@@ -319,7 +392,7 @@ def _get_csv(mainorg, benchmark):
 
 def _populate_benchmark(mainorg, benchmark):
     # there are three different kinds of report, and we require
-    # two differnent queries to service them
+    # two different queries to service them
     if benchmark["parameters"]["type"] == "publications":
         _publicationsReport(mainorg, benchmark["parameters"], benchmark)
     else:
@@ -367,15 +440,27 @@ def POST_benchmarking(mainorg):
 def _publicationsReport(mainorg, j, benchmark):
     q = deepcopy(publications_query_template)
     
+    start = j.get("start")
+    end = j.get("end")
+    
+    try:
+        if start is not None:
+            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
+        if end is not None:
+            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
+    except ValueError:
+        # do nothing, it's fine
+        pass
+    
     # build in the standard parts of the query
     if j.get("start", "") != "":
         qs = deepcopy(b_publication_from_template)
-        qs['range']['project.publication.date']['from'] = j.get("start")
+        qs['range']['project.publication.date']['from'] = start
         q['query']['bool']['must'].append(qs)
     
     if j.get("end", "") != "":
         qe = deepcopy(b_publication_to_template)
-        qe['range']['project.publication.date']['to'] = j.get("end")
+        qe['range']['project.publication.date']['to'] = end
         q['query']['bool']['must'].append(qe)
     
     if j.get("granularity", "") != "":
@@ -447,8 +532,6 @@ def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
 def _valueCountReport(mainorg, j, benchmark):
     q = deepcopy(valuecount_query_template)
     
-    print j
-    
     start = j.get("start")
     end = j.get("end")
     
@@ -517,6 +600,15 @@ leadro_template = {
 
 b_grant_category_template = {
     "term" : {"project.grantCategory.exact" : None}
+}
+
+projects_query_template = {
+    "query" : {
+        "bool" : {
+        	"must" : []
+        }
+    },
+    "size" : 1000 # a suitably large number
 }
 
 publications_query_template = {
