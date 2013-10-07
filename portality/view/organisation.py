@@ -267,7 +267,7 @@ def allfunders(mainorg=None):
     return resp
 
 @blueprint.route("/<mainorg>/grantcategories")
-def allfunders(mainorg=None):
+def grantcategories(mainorg=None):
     c = models.Record()
     funders = c.grant_categories()
     resp = make_response(json.dumps(funders))
