@@ -204,9 +204,7 @@ $(document).ready(function() {
         
         function toMillis(str) {
             var parts = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-            alert(JSON.stringify(parts))
             var d = new Date(parts[3], parts[2] - 1, parts[1]) // month is zero indexed
-            alert(d)
             return d.getTime()
         }
         
