@@ -327,6 +327,6 @@ def indexg4he(whichindex=None, limit=None, batch_size=1000):
 
 if __name__ == "__main__":
     LIMIT = None
-    BATCH_SIZE = 100
+    BATCH_SIZE = 1000
     indexg4he(limit=LIMIT, batch_size=BATCH_SIZE)
 
