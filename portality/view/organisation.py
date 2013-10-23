@@ -42,10 +42,13 @@ def organisations():
         
     else:
 
-        logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
+        #logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
+        #logos=sorted(os.listdir(logofolder))
+        logos = []
+
         return render_template(
             'organisation/orgs.html',
-            logos=sorted(os.listdir(logofolder)),
+            logos=logos,
             orgs=json.dumps(dropdowns('record','collaboratorOrganisation.canonical'))
         )
 
@@ -61,14 +64,15 @@ def organisation(mainorg):
     # show this org snapshot data, top projects, recent funding by years, pubs
     # offer a download report overview of this org
 
-    logo = mainorg.lower().replace(' ','_').replace("'",'').replace('university_','').replace('_university','').replace('_of','').replace('of_','').replace('_the','').replace('the_','').replace('_and','').replace('and_','').replace('_for','').replace('for_','').replace('_.','.') + '.png';
+    #logo = mainorg.lower().replace(' ','_').replace("'",'').replace('university_','').replace('_university','').replace('_of','').replace('of_','').replace('_the','').replace('the_','').replace('_and','').replace('and_','').replace('_for','').replace('for_','').replace('_.','.') + '.png';
     
-    logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
-    logos=os.listdir(logofolder)
-    if logo not in logos:
-        logo = ''
-    else:
-        logo = '/static/logos/' + logo
+    #logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
+    #logos=os.listdir(logofolder)
+    #if logo not in logos:
+    #    logo = ''
+    #else:
+    #    logo = '/static/logos/' + logo
+    logo = ""
 
     qry = {
         "query": {
