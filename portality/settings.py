@@ -58,7 +58,8 @@ MAPPINGS['account'] = {'account':MAPPINGS['record']['record']}
 MAPPINGS['searchhistory'] = {'searchhistory':MAPPINGS['record']['record']}
 MAPPINGS['unapprovedaccount'] = {'unapprovedaccount':MAPPINGS['record']['record']}
 
-GTR_INDEX = "GTR"
+#GTR_INDEX = "gtr"
+GTR_INDEX = "g4he2"
 GTR_MAPPINGS = {
     "project" : {
         "project" : {

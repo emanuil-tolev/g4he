@@ -19,35 +19,64 @@ class Config(DomainObject):
 # Raw GtR models
 class Project(DomainObject):
     __type__ = "project"
-    INDEX = app.config.get('GTR_INDEX','GTR')
+    INDEX = app.config.get('GTR_INDEX','gtr')
 
 class CerifProject(DomainObject):
     __type__ = "cerifproject"
-    INDEX = app.config.get('GTR_INDEX','GTR')
+    INDEX = app.config.get('GTR_INDEX','gtr')
 
 class Person(DomainObject):
     __type__ = "person"
-    INDEX = app.config.get('GTR_INDEX','GTR')
+    INDEX = app.config.get('GTR_INDEX','gtr')
+    
+    @classmethod
+    def org_record(cls, person_id):
+        full_pers = cls.pull_by_key("person.id", person_id)
+        org = full_pers.get("organisation")
+        return org
+
+class PersonHistory(DomainObject):
+    __type__ = "personhistory"
+    INDEX = app.config.get('GTR_INDEX','gtr')
+    
+    @classmethod
+    def get_org_id(cls, person_id, project_id):
+        q = {
+            "query" : {
+                "bool" : {
+                    "must" : [
+                        { "term" : { "project.exact" : project_id } },
+                        { "term" : { "person.exact" : person_id } }
+                    ]
+                }
+            }
+        }
+        res = cls.query(q=q)
+        orgs = [r.get("_source", {}).get("org") for r in res.get("hits", {}).get("hits", [])]
+        
+        if len(orgs) > 0:
+            return orgs[0]
+        return None
     
 class Organisation(DomainObject):
     __type__ = "organisation"
-    INDEX = app.config.get('GTR_INDEX','GTR')
+    INDEX = app.config.get('GTR_INDEX','gtr')
     
 class Publication(DomainObject):
     __type__ = "publication"
-    INDEX = app.config.get('GTR_INDEX','GTR')
+    INDEX = app.config.get('GTR_INDEX','gtr')
     
 class CerifClass(DomainObject):
     __type__ = "cerifclass"
-    INDEX = app.config.get('GTR_INDEX','GTR')
+    INDEX = app.config.get('GTR_INDEX','gtr')
 
 class RecordA(DomainObject):
     __type__ = "record"
-    INDEX = 'G4HEA'
+    INDEX = 'g4hea'
 
 class RecordB(DomainObject):
     __type__ = "record"
-    INDEX = 'G4HEB'
+    INDEX = 'g4heb'
 
 class Record(DomainObject):
     __type__ = "record"

@@ -1,5 +1,5 @@
 import os, json, UserDict, requests, uuid
-
+from copy import deepcopy
 from datetime import datetime
 
 try:
@@ -102,6 +102,8 @@ class DomainObject(UserDict.IterableUserDict):
     def bulk(cls, bibjson_list, idkey='id', refresh=False):
         data = ''
         for r in bibjson_list:
+            if idkey not in r:
+                r[idkey] = cls.makeid()
             data += json.dumps( {'index':{'_id':r[idkey]}} ) + '\n'
             data += json.dumps( r ) + '\n'
         r = requests.post(cls.target() + '_bulk', data=data)
@@ -139,7 +141,19 @@ class DomainObject(UserDict.IterableUserDict):
             return cls.pull( res['hits']['hits'][0]['_source']['id'] )
         else:
             return None
-
+    
+    @classmethod
+    def term(cls, field, value, one_answer=False):
+        query = {
+            "query" : {
+                "term" : {field : value}
+            }
+        }
+        result = cls.query(q=query)
+        objects = [i.get("_source", {}) for i in result.get('hits', {}).get('hits', [])]
+        if one_answer:
+            return objects[0]
+        return objects
 
     @classmethod
     def keys(cls,mapping=False,prefix=''):
@@ -169,7 +183,6 @@ class DomainObject(UserDict.IterableUserDict):
     @classmethod
     def mapping(cls):
         return cls.query(endpoint='_mapping')[cls.__type__]
-
 
     @classmethod
     def query(cls, recid='', endpoint='_search', q='', terms=None, facets=None, **kwargs):
@@ -256,5 +269,41 @@ class DomainObject(UserDict.IterableUserDict):
     @classmethod
     def delete_index(cls):
         r = requests.delete(cls.target(layer='index'))
+    
+    @classmethod
+    def iterate(cls, q, page_size=1000, limit=None):
+        q["size"] = page_size
+        q["from"] = 0
+        counter = 0
+        while True:
+            # apply the limit
+            if limit is not None and counter >= limit:
+                break
+            
+            res = cls.query(q=q)
+            rs = [r.get("_source") for r in res.get("hits", {}).get("hits", [])]
+            if len(rs) == 0:
+                break
+            for r in rs:
+                # apply the limit (again)
+                if limit is not None and counter >= limit:
+                    break
+                counter += 1
+                yield r
+            q["from"] += page_size   
+    
+    @classmethod
+    def iterall(cls, page_size=1000, limit=None):
+        return cls.iterate(deepcopy(all_query), page_size, limit)
 
+########################################################################
+## Some useful ES queries
+########################################################################
+
+all_query = { 
+    "query" : { 
+        "match_all" : { }
+    }
+}
+    
 
