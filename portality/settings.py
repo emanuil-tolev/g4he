@@ -13,11 +13,11 @@ SERVICE_NAME = "G4HE"
 SERVICE_TAGLINE = "The gateway for higher education"
 HOST = "0.0.0.0"
 DEBUG = True
-PORT = 5004
+PORT = 5003
 
 # elasticsearch settings
 ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200" # remember the http:// or https://
-ELASTIC_SEARCH_DB = "g4he2"
+ELASTIC_SEARCH_DB = "g4hea"
 INITIALISE_INDEX = False # whether or not to try creating the index and required index types on startup
 
 # list of superuser account names
