@@ -38,28 +38,28 @@ $( "#projects" ).autocomplete({
 
 
 $( "#people" ).autocomplete({
-      source: function( request, response ) {
-        $.ajax({
-          url: "/stream/record/collaboratorPerson.canonical?q=" + request.term,
-          dataType: "json",
-          success: function( data ) {
-            response( $.map( data, function( item ) {
-              return {
-                label: item,
-                value: item
-              }
-            }));
+  source: function( request, response ) {
+    $.ajax({
+      url: "/stream/record/collaboratorPerson.canonical?q=" + request.term,
+      dataType: "json",
+      success: function( data ) {
+        response( $.map( data, function( item ) {
+          return {
+            label: item,
+            value: item
           }
-        });
-      },
-      minLength: 2,
-      select: function( event, ui ) {
-        $('#params').append('<p><a class="removeparam" href="#" style="color:red;">x</a> Person: <a href="#" class="param" data-type="person">' + ui.item.label + '</a></p>');
-        $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
-        $(this).val("");
-        return false;
+        }));
       }
     });
+  },
+  minLength: 2,
+  select: function( event, ui ) {
+    $('#params').append('<p><a class="removeparam" href="#" style="color:red;">x</a> Person: <a href="#" class="param" data-type="person">' + ui.item.label + '</a></p>');
+    $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
+    $(this).val("");
+    return false;
+  }
+});
 
 
 var addstuff = function(event) {
@@ -85,6 +85,11 @@ $('.addurls').bind('click',addstuff);
 $('.addkeywords').bind('click',addstuff);
 
 
+var showexpansion = function(event) {
+    event.preventDefault();
+    $(this).parent().siblings('.expander').toggle();
+}
+
 var generate = function(event) {
     event.preventDefault();
     var params = {
@@ -106,7 +111,6 @@ var generate = function(event) {
             }
         });
     }
-    var loc = window.location;
     $.ajax({
         'url': window.location + '.json',
         'type': 'POST',
@@ -114,18 +118,44 @@ var generate = function(event) {
         'contentType': 'application/json',
         'data': JSON.stringify(params),
         'success': function(data) {
-            var basis = '<h2>Keywords</h2><div class="well marketing-first"><p>We generated and used these keywords for your matches. To restrict matches, remove some of these and re-generate (or provide completely new parameters above for a new match set).</p>'
+            var basis = '<h2>Keywords</h2><div class="well marketing-first" style="margin-top:17px;"><p>We generated and used these keywords for your matches. To restrict matches, remove some of these and re-generate (or provide completely new parameters above for a new match set).</p>'
             for ( var i = 0; i < data.params.length; i++ ) {
                 basis += '<p><a class="removeparam" href="#" style="color:red;">x</a> <a href="#" class="generatedkeyword">' + data.params[i] + '</a></p>'; 
             }
             basis += '<p><a href="#" class="btn" id="regenerate">Re-generate matches</a></p></div>';
-            var matches = '<h2>Your matches</h2><table class="table table-striped table-bordered">';
+            var matches = '<h2>Your top ten best matches</h2><div style="float:right;">';
+            matches += '<a href="/organisation/{{org}}/matching.csv?';
+            for ( var param in params ) {
+                matches += param + '=';
+                var first = true;
+                for ( var v in params[param] ) {
+                    if ( first ) {
+                        first = false;
+                    } else {
+                        matches += ',';
+                    }
+                    matches += params[param][v];
+                }
+                matches += '&';
+            }
+            matches += '">download as csv</a></div><table class="table table-striped table-bordered">';
             for ( var i = 0; i < data.new_potential.length; i++ ) {
-                matches += '<tr><td>' + data.new_potential[i] + '</td></tr>';
+                var ts = data.new_potential[i];
+                matches += '<tr><td>';
+                matches += '<h2>' + ts.name + '<small> have a total of ' + ts.projects + ' projects worth £' + ts.totalfunding + '</small>' + '</h2>';
+                matches += '<p>View <a class="showexpansion" href="#">' + ts.related.length + ' potentially relevant project titles</a> or ';
+                matches += '<a target="_blank" href="/organisation/' + ts.name + '">read more about ' + ts.name + '</a></p>';
+                matches += '<div class="expander" style="display:none;">';
+                for ( var t in ts.related ) {
+                    matches += '<p>' + ts.related[t] + '</p>';
+                }
+                matches += '</div>';
+                matches += '</td></tr>';
             }
             matches += '</table>';
             $('#basis').html(basis);
             $('#matches').html(matches);
+            $('.showexpansion').bind('click',showexpansion);
             $('#regenerate').bind('click',generate);
             $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
             $('html, body').animate({
@@ -133,7 +163,6 @@ var generate = function(event) {
             }, 500);
         }
     })
-    // TODO: change this alert to an ajax call
 }
 $('#generate').bind('click',generate);
 
@@ -158,8 +187,6 @@ $('input, select').bind('focus',slider);
     <div class="span12">
         <div class="hero-unit">
             <h1>New Potential for <br><a href="/organisation/{{ org }}">{{ org }}</a></h1>
-            <h3>EXPERIMENTAL - RESULTS LIKELY TO BE SPURIOUS</h3>
-            <h3>TODO: we will fix the dropdown display error, we will add a loading image, and we will add further data about the value of matches with links to their work. But let us know what you think of this so far.</h3>
         </div>
     </div>
 </div>

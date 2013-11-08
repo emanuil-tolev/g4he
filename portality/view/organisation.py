@@ -55,7 +55,7 @@ def organisations():
 
 @blueprint.route("/<mainorg>")
 @blueprint.route("/<mainorg>.json")
-def organisation(mainorg):
+def organisation(mainorg, raw=False):
     # TODO:
     # list all this orgs projects
     # list a blurb and website about this org
@@ -108,7 +108,9 @@ def organisation(mainorg):
 
     # TODO: should really have an org object with the above info in it and it 
     # should be passed to the page instead of the mainorg string
-    if util.request_wants_json():
+    if raw:
+        return org
+    elif util.request_wants_json():
         resp = make_response(json.dumps(org))
         resp.mimetype = "application/json"
         return resp
@@ -175,7 +177,7 @@ def matching(mainorg, suffix=None):
             #except:
             #    pass
 
-    collabs = []
+    potential = []
     # perform the search with the defined params and build a list of matching orgs
     if len(params) > 0 or len(person) > 0:
         qry = {
@@ -197,11 +199,11 @@ def matching(mainorg, suffix=None):
                     ]
                 }
             },
+            "size": 1000,
             "facets" : {
                 "collaborators" : {
-                    "terms_stats" : {
-                        "key_field" : "collaboratorOrganisation.canonical.exact",
-                        "value_field" : "project.fund.valuePounds",
+                    "terms" : {
+                        "field" : "collaboratorOrganisation.canonical.exact",
                         "size" : 100
                     }
                 }
@@ -221,20 +223,27 @@ def matching(mainorg, suffix=None):
                     })
 
         # get the collaborator orgs found in the search results
+        # strip the ones who already collaborate with the mainorg
+        # then find out some info about the remaining ones
         r = models.Record.query(q=qry)
         collabs = [i['term'] for i in r.get("facets", {}).get("collaborators", {}).get("terms", [])]
 
-        # get all the mainorgs current collaborators and exclude them from the list
-        cs = models.Record().ordered_collaborators(mainorg=mainorg,count=10000)
-        for c in cs:
-            if c['term'] in collabs: collabs.remove(c['term'])
+        cs = [i['term'] for i in models.Record().ordered_collaborators(mainorg=mainorg,count=10000)]
 
-    
-    # TODO: for each new potential collaborator, get their top info perhaps
-    # and pass back that data instead of just the collab names
-    
+        for collab in collabs:
+            if collab not in cs and len(potential) < 10:
+                p = organisation(collab, raw=True)
+                p['related'] = []
+                for i in r.get("hits", {}).get("hits",[]):
+                    canonicals = [l.get('canonical','') for l in i['_source'].get('collaboratorOrganisation',[])]
+                    title = i['_source']['project']['title']
+                    if collab in canonicals and mainorg not in canonicals and title not in p['related']:
+                        p['related'].append(title)
+                potential.append(p)
+                
+        
     matchinfo = {
-        "new_potential": collabs,
+        "new_potential": potential,
         "params": params,
         "person": person,
         "project": project,
@@ -247,7 +256,26 @@ def matching(mainorg, suffix=None):
         resp.mimetype = "application/json"
         return resp
     elif suffix == "csv":
-        pass
+        output = StringIO.StringIO()
+        writer = csv.writer(output)
+    
+        if len(potential) > 0:
+            headers = ["name","projects","collaborators","funding","related"]
+            writer.writerow(headers)
+            for p in potential:
+                r = [
+                    p['name'],
+                    p['projects'],
+                    p['collaborators'],
+                    p['totalfunding'],
+                    len(p['related'])
+                ]
+                writer.writerow(r)
+    
+        resp = make_response(output.getvalue())
+        resp.mimetype = "text/csv"
+        resp.headers['Content-Disposition'] = 'attachment; filename="' + mainorg + '_new_potential_report.csv"'
+        return resp
     else:
         return render_template('organisation/match.html', org=mainorg, matchinfo=matchinfo)
 
@@ -777,7 +805,9 @@ def top(mainorg=None, form="json"):
     top_collabs = c.ordered_collaborators(mainorg, count, collaboration_definition)
     
     # make the response and send it back
-    if form == "json":
+    if form == "raw":
+        return top_collabs
+    elif form == "json":
         resp = make_response(json.dumps(top_collabs))
         resp.mimetype = "application/json"
         return resp
