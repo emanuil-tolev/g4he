@@ -850,6 +850,8 @@ def collaboration(mainorg=None):
     upper = request.values.get("upper")
     collab_orgs = []
     result_format = request.values.get("format", "html")
+    category = request.values.get("category")
+    status = request.values.get("status")
     
     defn = request.values.get("collaboration_definition")
     collaboration_definition = None
@@ -886,7 +888,7 @@ def collaboration(mainorg=None):
     collaboration_report = c.collaboration_report(mainorg, collaboration_definition,
                                 funder=funder, collab_orgs=collab_orgs,
                                 start=start, end=end, 
-                                lower=lower, upper=upper)
+                                lower=lower, upper=upper, category=category, status=status)
     
     
     # generate the report rows.  For each project we need to determine (based on the

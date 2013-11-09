@@ -185,15 +185,9 @@ class Record(DomainObject):
         terms = result.get("facets", {}).get("categories", {}).get("terms", [])
         return terms
 
-    def collaboration_report(self, mainorg, collaboration_definition, funder=None, collab_orgs=[], start=None, end=None, lower=None, upper=None):
+    def collaboration_report(self, mainorg, collaboration_definition, funder=None, collab_orgs=[], start=None, end=None, lower=None, upper=None, category=None, status=None):
         q = CollaborationQuery()
-        # q = deepcopy(query_template)
-        
         q.set_main_org(mainorg)
-        # main organisation
-        #qmo = deepcopy(query_org_template)
-        #qmo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-        #q['query']['filtered']['query']['bool']['must'].append(qmo)
         
         # add each of the collaboration definition facets
         for cd in collaboration_definition:
@@ -208,56 +202,40 @@ class Record(DomainObject):
         # collaborating organisations
         for org in collab_orgs:
             q.add_collaborator(org, cdefn)
-            #qo = deepcopy(query_org_template)
-            #qo['term']["collaboratorOrganisation.canonical.exact"] = org
-            #q['query']['filtered']['query']['bool']['must'].append(qo)
         
         # funder
         if funder is not None and funder != "":
             q.set_funder(funder)
-            #qf = deepcopy(query_funder_template)
-            #qf['term']['primaryFunder.name.exact'] = funder
-            #q['query']['filtered']['query']['bool']['must'].append(qf)
         
         # start date
         if start != "" and start is not None:
             q.set_start(start)
-            #qs = deepcopy(query_start_template)
-            #qs['range']['project.fund.end']['from'] = start
-            #q['query']['filtered']['query']['bool']['must'].append(qs)
         
         # end date 
         if end != "" and end is not None:
             q.set_end(end)
-            #qe = deepcopy(query_end_template)
-            #qe['range']['project.fund.start']['to'] = end
-            #q['query']['filtered']['query']['bool']['must'].append(qe)
         
         # lower project value bound
         if lower != "" and lower is not None:
             q.set_lower(lower)
-            #ql = deepcopy(query_lower_template)
-            #ql['range']['project.fund.valuePounds']['from'] = lower
-            #q['query']['filtered']['query']['bool']['must'].append(ql)
         
         # upper project value bound
         if upper != "" and upper is not None:
             q.set_upper(upper)
-            #qu = deepcopy(query_upper_template)
-            #qu['range']['project.fund.valuePounds']['to'] = upper
-            #q['query']['filtered']['query']['bool']['must'].append(qu)
+        
+        # grant category
+        if category != "" and category is not None:
+            q.set_grant_category(category)
+        
+        # project status
+        if status != "" and status is not None:
+            q.set_project_status(status)
         
         # do the query
         result = self.query(q=q.query)
         
+        # return the report object
         report = CollaborationReport(result, collaboration_definition)
-        
-        # extract the projects, facets and the result count from the query to send back
-        # projects = [i.get("_source") for i in result.get("hits", {}).get("hits", [])]
-        # facets = result.get("facets", {})
-        # count = result.get("hits", {}).get("total", 0)
-        
-        # return projects, facets, count
         return report
 
 # Collaboration Report object
@@ -365,6 +343,8 @@ class CollaborationQuery(object):
     end_template = { "range" : { "project.fund.start" : { "to" : "<end of range>" } } }       # but they are not!
     lower_template = { "range" : { "project.fund.valuePounds" : { "from" : "<lower limit of funding>" } } }
     upper_template = { "range" : { "project.fund.valuePounds" : { "to" : "<upper limit of funding>" } } }
+    category_template = { "term" : { "project.grantCategory.exact" : None } }
+    status_template = { "term" : { "project.status.exact" : None } }
     
     # generic ES query templates
     terms_stats = { "terms_stats" : {"key_field" : None, "value_field" : None, "size" : 0} }
@@ -462,6 +442,16 @@ class CollaborationQuery(object):
         qu = deepcopy(self.upper_template)
         qu['range']['project.fund.valuePounds']['to'] = upper
         self.query['query']['filtered']['query']['bool']['must'].append(qu)
+        
+    def set_grant_category(self, category):
+        qg = deepcopy(self.category_template)
+        qg['term']['project.grantCategory.exact'] = category
+        self.query['query']['filtered']['query']['bool']['must'].append(qg)
+    
+    def set_project_status(self, status):
+        qs = deepcopy(self.status_template)
+        qs['term']['project.status.exact'] = status
+        self.query['query']['filtered']['query']['bool']['must'].append(qs)
 
 # Query Templates
 ##################################################################################

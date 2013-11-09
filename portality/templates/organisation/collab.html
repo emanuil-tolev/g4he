@@ -604,6 +604,16 @@ $(document).ready(function() {
             param_patch["add_funder"] = funder
         }
         
+        var category = $("select[name=grantcategory]").val()
+        if (category && category !== "") {
+            param_patch["category"] = category
+        }
+        
+        var status = $("select[name=project_status]").val()
+        if (status && status != "") {
+            param_patch["status"] = status
+        }
+        
         updateReportParams(param_patch)
         
         fetchReport(true)
@@ -627,6 +637,15 @@ $(document).ready(function() {
     
     $(".highlightonfilled").change(function() {
         if ($(this).val() !== "") {
+            $(this).css("border", "2px solid #348C49")
+        }
+        else {
+            $(this).css("border", "1px solid #CCC")
+        }
+    })
+    
+    $(".highlightonnotdefault").change(function() {
+        if ($(this).val() !== "all") {
             $(this).css("border", "2px solid #348C49")
         }
         else {
@@ -799,6 +818,8 @@ $(document).ready(function() {
         var exclude_end = patch.exclude_end
         var exclude_lower = patch.exclude_lower
         var exclude_upper = patch.exclude_upper
+        var category = patch.category
+        var status = patch.status
         
         // clone the current report parameters
         var patchedParams = $.extend(true, {}, report_parameters);
@@ -867,6 +888,14 @@ $(document).ready(function() {
             patchedParams.upper = undefined;
         }
         
+        // these overwrite any previous values, so just copy them in
+        if (category) {
+            patchedParams.category = category
+        }
+        if (status) {
+            patchedParams.status = status
+        }
+        
         return patchedParams
     }
     
@@ -907,6 +936,8 @@ $(document).ready(function() {
         report_parameters.end = updatedParams.end
         report_parameters.upper = updatedParams.upper
         report_parameters.lower = updatedParams.lower
+        report_parameters.category = updatedParams.category
+        report_parameters.status = updatedParams.status
     }
     
     function getQueryArgs(params) {
@@ -929,6 +960,14 @@ $(document).ready(function() {
         }
         if (params.lower) {
             args["lower"] = params.lower
+        }
+        
+        if (params.category && params.category !== "all") {
+            args["category"] = params.category
+        }
+        
+        if (params.status && params.status != "all") {
+            args["status"] = params.status
         }
         
         // FIXME: what is wrong with a join here?  Did I miss something?
@@ -1139,6 +1178,28 @@ $(document).ready(function() {
     
     ///////////////////////////////////////////////////////////////////
     
+    //////////////////////////////////////////////////////////////////
+    
+    // data to load onload 
+    
+    function loadGrantCategories() {
+        $.ajax({
+            type : "GET",
+            dataType: "json",
+            url: "/organisation/{{mainorg}}/grantcategories",
+            success: function(data) {
+                var frag = "<option value='all'>Include All Categories</option>"
+                for (var i = 0; i < data.length; i++) {
+                    frag += "<option value='" + data[i].term + "'>" + data[i].term + "</option>"
+                }
+                $("select[name=grantcategory]").html(frag).removeAttr("disabled")
+            }
+        })
+    }
+    loadGrantCategories()
+    
+    ///////////////////////////////////////////////////////////////////
+    
     ///////////////////////////////////////////////////////////////////
     // page initialisation
     
@@ -1285,6 +1346,22 @@ $(document).ready(function() {
                             <option value="1m">£500k - 1m</option>
                             <option value="huge">£1m+</option>
                         </select>
+                    </div>
+                </div>
+                
+                <h4 style="margin-bottom: 5px">constrain the results by these project attributes</h4>
+                <div class="row-fluid">
+                    <div class="span6">
+                        <p>Limit to grant category: <select name="grantcategory" disabled="disabled" class="highlightonnotdefault">
+                            <option value="">Include All Categories</option>
+                        </select></p>
+                    </div>
+                    <div class="span6">
+                        <p>Show projects which are: <select name="project_status" class="highlightonnotdefault">
+                            <option value="all">Any Status</option>
+                            <option value="Active">Active</option>
+                            <option value="Closed">Closed</option>
+                        </select></p>
                     </div>
                 </div>
                 
