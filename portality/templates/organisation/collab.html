@@ -67,11 +67,31 @@ $(document).ready(function() {
     // we don't need to re-fetch it each time the widget's parameters are changed
     var collaborations_cache = undefined;
     
+    function getCollaborationRange(datepicker_format) {
+        var range = $("select[name=collaboration_highlight_range]").val()
+        if (range === "current") {
+            if (datepicker_format) {
+                return $.datepicker.formatDate("dd/mm/yy", new Date())
+            }
+            else {
+                return $.datepicker.formatDate("yy-mm-dd", new Date())
+            }
+        }
+        return false
+    }
+    
     // generate the top list of collaborators
     function topCollaborators(count) {
-        // we always start by getting the collaboration definition
+        // we always start by getting the collaboration definition and the range
         var cd = getCollaborationDefinition()
+        var from = getCollaborationRange()
+        
+        // build the query object
         var obj = {"count" : count, "collaboration_definition": cd.join(",")};
+        if (from) {
+            obj["start"] = from
+        }
+        
         $.ajax({
             type: "GET",
             url: "/organisation/{{mainorg}}/collaboration/top",
@@ -138,9 +158,18 @@ $(document).ready(function() {
             </thead> \
             <tbody>'
         
+        var range = getCollaborationRange(true)
+        var data_range
+        if (range) {
+            data_range = "data-start=" + range
+        }
+        else {
+            data_range = ""
+        }
+        
         for (var i = 0; i < data.length && i < limit; i++) {
             frag += '<tr>'
-            frag += '<td><a href="' + getReportUrl({add_orgs : [data[i].term]}) + '" class="highlighturl" data-add-orgs="' + data[i].term + '">' + data[i].term + "</a></td>"
+            frag += '<td><a href="' + getReportUrl({add_orgs : [data[i].term]}) + '" class="highlighturl" data-add-orgs="' + data[i].term + '" ' + data_range + '>' + data[i].term + "</a></td>"
             frag += "<td>" + data[i].count + "</td>"
             frag += "<td>£" + data[i].formatted_total + "</td>"
             frag += "</tr>"
@@ -151,8 +180,20 @@ $(document).ready(function() {
         var help = "<p>Click on an organisation to see the projects you collaborated with them on and who the other collaborators were.  Or, select an organisation from the " +
                     "pull-down menu on the right to be taken to the report.</p>"
         
+        // get the arguments for the csv link
+        var args = []
+        range = getCollaborationRange() // note that we get this in a different format
+        if (range) {
+            range = "start=" + range
+            args.push(range)
+        }
+        var cd = getCollaborationDefinition()
+        args.push("collaboration_definition=" + cd.join(","))
+        args.push("count=10000") // a stupid big number - there's currently no way to do "get me all"
+        var querystring = "?" + args.join("&")
+        
         var csv = '<div class="row-fluid"> \
-                    <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/top.csv">download full csv</a></div> \
+                    <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/top.csv' + querystring + '">download full csv</a></div> \
                 </div>'
         
         $("#collaboration_highlight_table_container").html(help + csv + frag);
@@ -168,7 +209,7 @@ $(document).ready(function() {
         
         for (var i = 0; i < data.length; i++) {
             var plural = data[i].count > 1 ? "s" : ""
-            frag += "<option value='" + data[i].term + "'>" + data[i].term + 
+            frag += "<option value='" + escape(data[i].term) + "'>" + data[i].term + 
                     "&nbsp;&mdash;&nbsp;" + data[i].count + " project" + plural + " totalling £" + 
                     data[i].formatted_total + "</option>"
         }
@@ -197,6 +238,12 @@ $(document).ready(function() {
         generateTopCollaboratorsGraph(collaborations_cache, count)
     })
     
+    $("select[name=collaboration_highlight_range]").change(function() {
+        // just regenerate the table - all the parameters will be picked
+        // up from the page
+        topCollaborators(50)
+    })
+    
     ///////////////////////////////////////////////////////////////////
     
     ///////////////////////////////////////////////////////////////////
@@ -204,11 +251,34 @@ $(document).ready(function() {
     
     var funder_cache = undefined;
     
+    function getFunderRange(datepicker_format) {
+        var range = $("select[name=funder_highlight_range]").val()
+        if (range === "current") {
+            if (datepicker_format) {
+                return $.datepicker.formatDate("dd/mm/yy", new Date())
+            }
+            else {
+                return $.datepicker.formatDate("yy-mm-dd", new Date())
+            }
+        }
+        return false
+    }
+    
     function funders() {
+        // get the date of validity
+        var from = getFunderRange()
+        
+        // build the query object
+        var obj = {};
+        if (from) {
+            obj["start"] = from
+        }
+        
         $.ajax({
             type: "GET",
             url: "/organisation/{{mainorg}}/collaboration/funders",
             dataType: "json",
+            data : obj,
             success : generateFunders
         })
     }
@@ -269,9 +339,18 @@ $(document).ready(function() {
             </thead> \
             <tbody>'
         
+        var range = getFunderRange(true)
+        var data_range
+        if (range) {
+            data_range = "data-start=" + range
+        }
+        else {
+            data_range = ""
+        }
+        
         for (var i = 0; i < data.length; i++) {
             frag += '<tr>'
-            frag += '<td><a href="' + getReportUrl({add_funder : data[i].term}) + '" class="highlighturl" data-add-funder="' + data[i].term + '">' + data[i].term + "</a></td>"
+            frag += '<td><a href="' + getReportUrl({add_funder : data[i].term}) + '" class="highlighturl" data-add-funder="' + data[i].term + '" ' + data_range + '>' + data[i].term + "</a></td>"
             frag += "<td>" + data[i].count + "</td>"
             frag += "<td>£" + data[i].formatted_total + "</td>"
             frag += "</tr>"
@@ -282,8 +361,18 @@ $(document).ready(function() {
         var help = "<p>Click on the funder name to see projects they funded and your collaborators where you collaborated with one or more organisations.  Or, " +
                     "select a funder from the pull-down on the right to be taken to the report</p>"
         
+        // get the arguments for the csv link
+        var args = []
+        var range = getCollaborationRange()
+        if (range) {
+            range = "start=" + range
+            args.push(range)
+        }
+        args.push("count=10000") // a stupid big number - there's currently no way to do "get me all"
+        var querystring = "?" + args.join("&")
+        
         var csv = '<div class="row-fluid"> \
-                    <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/funders.csv">download full csv</a></div> \
+                    <div class="span12" style="text-align: right"><a href="/organisation/{{mainorg}}/collaboration/funders.csv' + querystring + '">download full csv</a></div> \
                 </div>'
         
         $("#funder_highlight_table_container").html(help + csv + frag);
@@ -299,7 +388,7 @@ $(document).ready(function() {
         
         for (var i = 0; i < data.length; i++) {
             var plural = data[i].count > 1 ? "s" : ""
-            frag += "<option value='" + data[i].term + "'>" + data[i].term + 
+            frag += "<option value='" + escape(data[i].term) + "'>" + data[i].term + 
                     "&nbsp;&mdash;&nbsp;" + data[i].count + " project" + plural + " totalling £" + 
                     data[i].formatted_total + "</option>"
         }
@@ -321,6 +410,12 @@ $(document).ready(function() {
     // actually generate the funders
     funders()
     
+    $("select[name=funder_highlight_range]").change(function() {
+        // just regenerate the table - all the parameters will be picked
+        // up from the page
+        funders()
+    })
+    
     ///////////////////////////////////////////////////////////////////
     
     ///////////////////////////////////////////////////////////////////
@@ -337,18 +432,17 @@ $(document).ready(function() {
     function highlightUrlClick(event) {
         event.preventDefault()
         
-        add_orgs_list = $(this).attr("data-add-orgs")
-        add_orgs = []
+        var add_orgs_list = $(this).attr("data-add-orgs")
+        var add_orgs = []
         if (add_orgs_list != null && add_orgs_list !== "") {
             add_orgs = add_orgs_list.split(",")
         }
         
         // see if there is a funder to add
-        add_funder = $(this).attr("data-add-funder")
+        var add_funder = $(this).attr("data-add-funder")
         
-        // report shows only active projects
-        d = new Date()
-        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        // is there a start date for the report?
+        var ds = $(this).attr("data-start")
         
         setParameters({
             collab_orgs : add_orgs,
@@ -419,12 +513,13 @@ $(document).ready(function() {
             return
         }
         
+        var ds = getCollaborationRange(true)
         // report shows only active projects
-        d = new Date()
-        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        //d = new Date()
+        //ds = $.datepicker.formatDate("dd/mm/yy", d)
         
         setParameters({
-            collab_orgs : [org],
+            collab_orgs : [unescape(org)],
             start: ds
         })
         
@@ -448,12 +543,13 @@ $(document).ready(function() {
             return
         }
         
+        var ds = getFunderRange(true)
         // report shows only active projects
-        d = new Date()
-        ds = $.datepicker.formatDate("dd/mm/yy", d)
+        //d = new Date()
+        //ds = $.datepicker.formatDate("dd/mm/yy", d)
         
         setParameters({
-            funder : funder,
+            funder : unescape(funder),
             start: ds
         })
         
@@ -470,6 +566,29 @@ $(document).ready(function() {
     })
     
     $("#view_all_collaborations").click(function(event) {
+        event.preventDefault()
+        
+        // ensure all the bits are on display
+        $("#report_parameters").show();
+        $("#report_controls").show();
+        $("#report_container").show()
+        
+        // report shows only active projects
+        // d = new Date()
+        // ds = $.datepicker.formatDate("dd/mm/yy", d)
+        
+        setParameters({
+            start: undefined
+        })
+        
+        // we've set the parameters, some of which affect the report options
+        // form, so we need to sync it
+        synchroniseReportOptions()
+        
+        fetchReport(true)
+    })
+    
+    $("#view_current_collaborations").click(function(event) {
         event.preventDefault()
         
         // ensure all the bits are on display
@@ -1228,7 +1347,7 @@ $(document).ready(function() {
         
         <a href="#" id="define_collaboration">Define Collaboration</a>
         <div id="collaboration_definitions">
-            <p>To help you find the collaborators you are interested in, select the roles an organisation can have on a project which you regard to be a "collaboration"</p>
+            <p>To help you find the collaborators you are interested in, select the roles an organisation can have on a project which you regard to be a "collaborator"</p>
             
             <input class="collaborator_type" type="checkbox" name="leadro" value="leadro" checked="checked">&nbsp;<strong>Lead Research Organisation</strong> - An organisation that is in receipt of project funding and is accountable for ensuring the money is spent in accordance with the agreed terms and conditions.<br>
             
@@ -1246,7 +1365,9 @@ $(document).ready(function() {
         </div>
     </div>
     <div class="span3">
-        <button class="btn btn-primary" id="view_all_collaborations">View Full Collaboration Report &gt;</button>
+        <button class="btn btn-primary" id="view_current_collaborations">View Full Current Collaboration Report &gt;</button><br><br>
+        <button class="btn btn-primary" id="view_all_collaborations">View Full All Time Collaboration Report &gt;</button>
+        
     </div>
 </div>
 
@@ -1257,6 +1378,10 @@ $(document).ready(function() {
             <option value="10">10</option>
             <option value="25">25</option>
             <option value="50">50</option>
+        </select>
+        <select name="collaboration_highlight_range" style="width: 100px; font-weight: bold">
+            <option value="current">Current</option>
+            <option value="alltime">All Time</option>
         </select>
         Collaborations</h2>
     </div>
@@ -1280,7 +1405,12 @@ $(document).ready(function() {
 
 <div class="row-fluid">
     <div class="span6">
-        <h2>Funders of Collaborative Projects</h2>
+        <h2>Funders of 
+        <select name="funder_highlight_range" style="width: 100px; font-weight: bold">
+            <option value="current">Current</option>
+            <option value="alltime">All Time</option>
+        </select>
+        Collaborative Projects</h2>
     </div>
     <div class="span6">
         <select name="highlight_funder">

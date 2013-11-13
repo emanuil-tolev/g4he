@@ -360,7 +360,7 @@ def details(mainorg=None):
             qo = deepcopy(query_org_template)
             qo['term']["collaboratorOrganisation.canonical.exact"] = o
             org_query['query']['bool']['must'].append(qo)
-        print json.dumps(org_query)
+        # print json.dumps(org_query)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = [hit.get("_source", {}) for hit in compare_result.get("hits", {}).get("hits", [])]
         
@@ -553,9 +553,9 @@ def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
     if lower_time > -1 or upper_time > -1:
         valid_entries = []
         for entry in entries:
-            print entry["time"]
+            # print entry["time"]
             if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
-                print "valid"
+                # print "valid"
                 valid_entries.append(entry)
         benchmark["report"][name] = valid_entries
     else:
@@ -612,7 +612,7 @@ def _valueCountReport(mainorg, j, benchmark):
             qo = deepcopy(query_org_template)
             qo['term']["collaboratorOrganisation.canonical.exact"] = o
             org_query['query']['bool']['must'].append(qo)
-        print json.dumps(org_query)
+        # print json.dumps(org_query)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
         
@@ -799,10 +799,12 @@ def top(mainorg=None, form="json"):
         collaboration_definition = ["leadro", "principal_investigator", "co_investigator", "fellow"] # FIXME: this should be in config
     else:
         collaboration_definition = [d.strip() for d in defn.split(",")]
+    start = request.values.get("start")
+    
     
     # pass the parameters to the Record model
     c = models.Record()
-    top_collabs = c.ordered_collaborators(mainorg, count, collaboration_definition)
+    top_collabs = c.ordered_collaborators(mainorg, count, collaboration_definition, start=start)
     
     # make the response and send it back
     if form == "raw":
@@ -823,8 +825,11 @@ def top(mainorg=None, form="json"):
 @blueprint.route("/<mainorg>/collaboration/funders")
 @blueprint.route("/<mainorg>/collaboration/funders.<form>")
 def funders(mainorg=None, form="json"):
+    # extract the values from the request
+    start = request.values.get("start")
+    
     c = models.Record()
-    funders = c.ordered_funders(mainorg)
+    funders = c.ordered_funders(mainorg, start=start)
     
     if form == "json":
         resp = make_response(json.dumps(funders))
@@ -916,7 +921,7 @@ def collaboration(mainorg=None):
             
             # get the roles of this organisation on the project
             collab_roles = collaboration_report.roles(co.get("name"), p)
-            print collab_roles
+            # print collab_roles
             displayable_roles = [display_roles.get(r, r) for r in collab_roles]
             displayable_roles = ", ".join(displayable_roles)
             

@@ -106,10 +106,14 @@ class Record(DomainObject):
         return t + cls.__type__ + '/'
 
 
-    def ordered_collaborators(self, mainorg, count, collaboration_definition):
+    def ordered_collaborators(self, mainorg, count, collaboration_definition, start=None):
         q = CollaborationQuery()
         q.set_size(0) # we don't need any project results
         q.set_main_org(mainorg)
+        
+        # start date
+        if start != "" and start is not None:
+            q.set_start(start)
         
         # determine the size of the result set we want.  Note that due to a bug in 
         # Elasticsearch, we actually want to make this much bigger than the requirement (so we add 10000)
@@ -157,17 +161,22 @@ class Record(DomainObject):
         
         return newterms
 
-    def ordered_funders(self, mainorg):
-        q = deepcopy(query_template)
-        qo = deepcopy(query_org_template)
+    def ordered_funders(self, mainorg, start=None):
+        q = CollaborationQuery()
+        q.set_size(0) # we don't need any project results
+        q.set_main_org(mainorg)
         
-        qo['term']["collaboratorOrganisation.canonical.exact"] = mainorg
-        q['query']['filtered']['query']['bool']['must'].append(qo)
+        # start date
+        if start != "" and start is not None:
+            q.set_start(start)
         
-        result = self.query(q=q)
-        facets = result.get("facets", {})
-        terms = facets.get("funders", {}).get("terms", [])
+        # do the query
+        result = self.query(q=q.query)
         
+        # get the terms stats facet
+        terms = result.get("facets", {}).get("funders", {}).get("terms", [])
+        
+        # format the money and return
         for t in terms:
             t['formatted_total'] = "{:,.0f}".format(t['total'])
         
