@@ -13,7 +13,7 @@ SERVICE_NAME = "G4HE"
 SERVICE_TAGLINE = "The gateway for higher education"
 HOST = "0.0.0.0"
 DEBUG = True
-PORT = 5004
+PORT = 5003
 
 # elasticsearch settings
 ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200" # remember the http:// or https://

@@ -79,7 +79,6 @@ def restructure_people(project):
         # now look for the person in this project in the history data
         corrected_org_id = models.PersonHistory.get_org_id(person['id'], project.get("project", {}).get("id"))
         if corrected_org_id is not None:
-            print "has corrected org"
             # if there is a corrected id, we want to use that as the org instead
             corrected_org = models.Organisation.pull_by_key("organisationOverview.organisation.id", corrected_org_id)
             if corrected_org is not None:

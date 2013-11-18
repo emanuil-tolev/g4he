@@ -360,7 +360,7 @@ def details(mainorg=None):
             qo = deepcopy(query_org_template)
             qo['term']["collaboratorOrganisation.canonical.exact"] = o
             org_query['query']['bool']['must'].append(qo)
-        print json.dumps(org_query)
+        # print json.dumps(org_query)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = [hit.get("_source", {}) for hit in compare_result.get("hits", {}).get("hits", [])]
         
@@ -553,9 +553,9 @@ def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
     if lower_time > -1 or upper_time > -1:
         valid_entries = []
         for entry in entries:
-            print entry["time"]
+            # print entry["time"]
             if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
-                print "valid"
+                # print "valid"
                 valid_entries.append(entry)
         benchmark["report"][name] = valid_entries
     else:
@@ -612,7 +612,7 @@ def _valueCountReport(mainorg, j, benchmark):
             qo = deepcopy(query_org_template)
             qo['term']["collaboratorOrganisation.canonical.exact"] = o
             org_query['query']['bool']['must'].append(qo)
-        print json.dumps(org_query)
+        # print json.dumps(org_query)
         compare_result = models.Record.query(q=org_query)
         benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
         
@@ -793,10 +793,18 @@ def _make_csv(name, headers, rows):
 def top(mainorg=None, form="json"):
     # extract the values from the request
     count = int(request.values.get("count", 0))
+    defn = request.values.get("collaboration_definition")
+    collaboration_definition = None
+    if defn is None:
+        collaboration_definition = ["leadro", "principal_investigator", "co_investigator", "fellow"] # FIXME: this should be in config
+    else:
+        collaboration_definition = [d.strip() for d in defn.split(",")]
+    start = request.values.get("start")
+    
     
     # pass the parameters to the Record model
     c = models.Record()
-    top_collabs = c.ordered_collaborators(mainorg, count)
+    top_collabs = c.ordered_collaborators(mainorg, count, collaboration_definition, start=start)
     
     # make the response and send it back
     if form == "raw":
@@ -817,8 +825,11 @@ def top(mainorg=None, form="json"):
 @blueprint.route("/<mainorg>/collaboration/funders")
 @blueprint.route("/<mainorg>/collaboration/funders.<form>")
 def funders(mainorg=None, form="json"):
+    # extract the values from the request
+    start = request.values.get("start")
+    
     c = models.Record()
-    funders = c.ordered_funders(mainorg)
+    funders = c.ordered_funders(mainorg, start=start)
     
     if form == "json":
         resp = make_response(json.dumps(funders))
@@ -844,9 +855,18 @@ def collaboration(mainorg=None):
     upper = request.values.get("upper")
     collab_orgs = []
     result_format = request.values.get("format", "html")
+    category = request.values.get("category")
+    status = request.values.get("status")
+    
+    defn = request.values.get("collaboration_definition")
+    collaboration_definition = None
+    if defn is None:
+        collaboration_definition = ["leadro", "principal_investigator", "co_investigator", "fellow"] # FIXME: this should be in config
+    else:
+        collaboration_definition = [d.strip() for d in defn.split(",")]
     
     for k, v in request.values.items():
-        if k.startswith("collab"):
+        if k.startswith("collab") and k != "collaboration_definition":
             orgs = v.split(",")
             collab_orgs += orgs
     
@@ -861,6 +881,8 @@ def collaboration(mainorg=None):
         # do nothing, it's fine
         pass
     
+    # print funder, start, end, lower, upper, collab_orgs, result_format, collaboration_definition
+    
     # if we've been asked for the landing page for the collaboration report,
     # don't bother doing any of the hard work
     if (result_format == "html" and funder is None and start is None and
@@ -868,42 +890,61 @@ def collaboration(mainorg=None):
         return render_template('organisation/collab.html', mainorg=mainorg, report=None)
     
     c = models.Record()
-    projects, facets, count = c.collaboration_report(mainorg, 
+    collaboration_report = c.collaboration_report(mainorg, collaboration_definition,
                                 funder=funder, collab_orgs=collab_orgs,
                                 start=start, end=end, 
-                                lower=lower, upper=upper)
+                                lower=lower, upper=upper, category=category, status=status)
     
     
-    # format the numbers in the facets
-    for f in facets.get("collaborators", {}).get("terms"):
-        f['formatted_total'] = "{:,.0f}".format(f['total'])
+    # generate the report rows.  For each project we need to determine (based on the
+    # collaborator definition) what the list of collaborators actually is, and then
+    # build the report around that.
     
-    facets['value_stats']['formatted_total'] = "{:,.0f}".format(facets.get("value_stats", {}).get("total", 0))
+    display_roles = {
+        "principalInvestigator" : "Principal Investigator",
+        "coInvestigator" : "Co-Investigator",
+        "fellow" : "Fellow",
+        "leadRo" : "Lead Research Organisation",
+        "coFunder" : "Co-Funder",
+        "projectPartner" : "Project Partner",
+        "collaboration" : "Resulting Collaboration"
+    }
     
-    for f in facets.get("funders", {}).get("terms"):
-        f['formatted_total'] = "{:,.0f}".format(f['total'])
-    
-    # generate the report rows
     report = []
-    for p in projects:
-        for co in p.get("collaboratorOrganisation", []):
+    for p in collaboration_report.projects:
+        actual_collaborators = collaboration_report.collaborators(p)
+        for co in actual_collaborators:
+        # for co in p.get("collaboratorOrganisation", []):
             # if the collaborating organisation is the main organisation, skip it
-            if co.get("canonical") == mainorg:
+            if co.get("name") == mainorg:
                 continue
+            
+            # get the roles of this organisation on the project
+            collab_roles = collaboration_report.roles(co.get("name"), p)
+            # print collab_roles
+            displayable_roles = [display_roles.get(r, r) for r in collab_roles]
+            displayable_roles = ", ".join(displayable_roles)
             
             row = {}
             row["pid"] = p.get("id")
-            row['collaborator'] = co.get("canonical")
+            row['collaborator'] = co.get("name")
+            row["collaborator_role"] = displayable_roles
             row['projectTitle'] = p.get("project", {}).get("title", "untitled")
             row['projectValue'] = p.get("project", {}).get("fund", {}).get("valuePounds", 0)
             row['formattedProjectValue'] = "{:,.0f}".format(row["projectValue"])
-            row['collaborationSize'] = len(p.get("collaboratorOrganisation", []))
+            row['collaborationSize'] = len(actual_collaborators)
             row['awardRef'] = p.get("project", {}).get("grantReference", "unknown")
             row['funder'] = p.get("primaryFunder", {}).get("name", "unknown")
             row['startDate'] = p.get("project", {}).get("fund", {}).get("start")
-            row["formattedStartDate"] = datetime.strftime(datetime.strptime(row["startDate"], "%Y-%m-%d"), "%d/%m/%Y")
+            if row["startDate"] is not None:
+                row["formattedStartDate"] = datetime.strftime(datetime.strptime(row["startDate"], "%Y-%m-%d"), "%d/%m/%Y")
+            else:
+                row["formattedStartDate"] = None
             row['endDate'] = p.get("project", {}).get("fund", {}).get("end")
-            row["formattedEndDate"] = datetime.strftime(datetime.strptime(row["endDate"], "%Y-%m-%d"), "%d/%m/%Y")
+            if row["endDate"] is not None:
+                row["formattedEndDate"] = datetime.strftime(datetime.strptime(row["endDate"], "%Y-%m-%d"), "%d/%m/%Y")
+            else:
+                row["formattedEndDate"] = None
             
             # extract the PIs (of which there should only be one)
             pis = p.get("principalInvestigator", [])
@@ -915,11 +956,25 @@ def collaboration(mainorg=None):
                 row["piOrganisation"] = ""
             
             report.append(row)
+    """
+    # format the numbers in the facets
+    for f in facets.get("collaborators", {}).get("terms"):
+        f['formatted_total'] = "{:,.0f}".format(f['total'])
     
+    # format the numbers for the value stats
+    facets['value_stats']['formatted_total'] = "{:,.0f}".format(facets.get("value_stats", {}).get("total", 0))
+    
+    # format the numbers for the funders
+    for f in facets.get("funders", {}).get("terms"):
+        f['formatted_total'] = "{:,.0f}".format(f['total'])
+    """
     data = {
         "rows" : report,
-        "facets" : facets,
-        "count" : count
+        "collaborators" : collaboration_report.collaborators_facet(),
+        "value_stats" : collaboration_report.value_stats(),
+        "funders" : collaboration_report.funders_facet(),
+        # "facets" : facets,
+        "count" : collaboration_report.count()
     }
     
     #FIXME: we need to do a proper treatment of the HTML version of the report with arguments - at the 
@@ -933,11 +988,11 @@ def collaboration(mainorg=None):
         return resp
 
     elif result_format == "csv":
-        headers = ["collaborator", "project title", "principal investigator", "pi organisation" , "number of project collaborators", "total project funding", 
+        headers = ["collaborator", "collaborator role on project", "project title", "principal investigator", "pi organisation" , "number of project collaborators", "total project funding", 
                     "funder", "award ref", "project start date", "project end date"]
         rows = []
         for row in report:
-            rows.append([row['collaborator'], row['projectTitle'], row["principalInvestigator"], row["piOrganisation"], row['collaborationSize'], row['projectValue'], 
+            rows.append([row['collaborator'], row["collaborator_role"], row['projectTitle'], row["principalInvestigator"], row["piOrganisation"], row['collaborationSize'], row['projectValue'], 
                     row['funder'], row['awardRef'], row['startDate'], row['endDate']])
         return _make_csv(mainorg + " Collaborations Report", headers, rows)
             
