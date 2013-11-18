@@ -228,7 +228,7 @@ def matching(mainorg, suffix=None):
         r = models.Record.query(q=qry)
         collabs = [i['term'] for i in r.get("facets", {}).get("collaborators", {}).get("terms", [])]
 
-        cs = [i['term'] for i in models.Record().ordered_collaborators(mainorg=mainorg,count=10000)]
+        cs = [i['term'] for i in models.Record().ordered_collaborators(mainorg,10000)]
 
         for collab in collabs:
             if collab not in cs and len(potential) < 10:
