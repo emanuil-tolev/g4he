@@ -129,6 +129,8 @@ class Record(DomainObject):
             q.add_terms_facet(cd, mapped, size)
         
         # do the query
+        import json
+        print json.dumps(q.query)
         result = self.query(q=q.query)
         
         # get the superset of terms that we may want to return
@@ -412,6 +414,9 @@ class CollaborationQuery(object):
     
     def set_terms_stats_size(self, name, size):
         self.query["facets"][name]["terms_stats"]["size"] = size
+    
+    def constrain_collaborator_facet_to_type(self):
+        pass
     
     def add_terms_facet(self, name, field, size):
         f = deepcopy(self.terms)
