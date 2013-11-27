@@ -1,6 +1,7 @@
 
 from copy import deepcopy
 from datetime import datetime
+import json
 
 from portality.dao import DomainObject as DomainObject
 from portality.core import app
@@ -108,7 +109,7 @@ class Record(DomainObject):
 
     def ordered_collaborators(self, mainorg, count, collaboration_definition, start=None):
         q = CollaborationQuery()
-        q.set_size(0) # we don't need any project results
+        # q.set_size(0) # we don't need any project results
         q.set_main_org(mainorg)
         
         # start date
@@ -117,52 +118,70 @@ class Record(DomainObject):
         
         # determine the size of the result set we want.  Note that due to a bug in 
         # Elasticsearch, we actually want to make this much bigger than the requirement (so we add 10000)
-        excess = 10000
-        size = count + 1 + excess if count != 0 else 0
-        q.set_terms_stats_size("collaborators", size)
+        #excess = 10000
+        #size = count + 1 + excess if count != 0 else 0
+        #q.set_terms_stats_size("collaborators", size)
+        size = 10000
+        q.set_size(size)
         
         # add each of the collaboration definition facets
+        #for cd in collaboration_definition:
+        #    mapped = self.definition_map.get(cd)
+        #    if mapped is None:
+        #        continue
+        #    q.add_terms_facet(cd, mapped, size)
+        
+        # add only the fields that we are interested in
+        q.add_field("project.fund.valuePounds")
         for cd in collaboration_definition:
             mapped = self.definition_map.get(cd)
             if mapped is None:
                 continue
-            q.add_terms_facet(cd, mapped, size)
+            q.add_field(mapped)
         
         # do the query
-        import json
-        print json.dumps(q.query)
+        # print json.dumps(q.query)
         result = self.query(q=q.query)
         
-        # get the superset of terms that we may want to return
-        terms = result.get("facets", {}).get("collaborators", {}).get("terms", [])
+        # make sure we got everything
+        total = result.get("hits", {}).get("total")
+        if total > size:
+            q.set_size(total)
+            result = self.query(q=q.query)
         
-        # the first result is always the mainorg
-        terms = terms[1:]
+        fields = [hit.get("fields") for hit in result.get("hits", {}).get("hits", [])]
         
-        # get the deduplicated list of collaborators that are allowed
-        duplicated_all = []
-        for cd in collaboration_definition:
-            duplicated_all += [t.get("term") for t in result.get("facets", {}).get(cd, {}).get("terms", [])]
-        unique_collaborators = set(duplicated_all)
+        collaborator_facet = {}
+        for field in fields:
+            # extract a unique list of the orgs in this record
+            all_orgs = []
+            for key, orgs in field.iteritems():
+                if key == "project.fund.valuePounds": continue    
+                if isinstance(orgs, list):
+                     for o in orgs:
+                        if o not in all_orgs: all_orgs.append(o)
+                else:
+                    if orgs not in all_orgs: all_orgs.append(orgs)
+            
+            # find out the value of the project
+            value = field.get("project.fund.valuePounds")
+            
+            # for each org sum the value, and increment/start the count
+            for org in all_orgs:
+                # add to the collaborator_facet, or append to the org_record in that facet
+                # and increment a counter for number of projects
+                if org in collaborator_facet:
+                    collaborator_facet[org]["count"] += 1
+                    collaborator_facet[org]["total"] += value
+                else:
+                    collaborator_facet[org] = {"term" : org, "count" : 1, "total": value}
         
-        # now go through the terms and keep the ones which belong to defined collaborators
-        counter = 0
-        newterms = []
-        for t in terms:       
-            if t.get("term") in unique_collaborators:
-                # limit the result size to the desired count
-                counter += 1
-                if counter > count and count != 0: # a count of 0 means everything!
-                    break
-                
-                # format the numbers here, as it is easier than in javascript
-                t['formatted_total'] = "{:,.0f}".format(t['total'])
-                
-                # keep this one
-                newterms.append(t)
+        facet = collaborator_facet.values()
+        for f in facet:
+            f["formatted_total"] = "{:,.0f}".format(f['total'])
         
-        return newterms
-
+        return sorted(facet, key=lambda f: f["count"], reverse=True)[1:]
+        
     def ordered_funders(self, mainorg, start=None):
         q = CollaborationQuery()
         q.set_size(0) # we don't need any project results
@@ -363,46 +382,55 @@ class CollaborationQuery(object):
     bool_should = {"bool" : {"should" : [], "minimum_number_should_match" : 1 }}
     term = {"term" : {}}
     
-    def __init__(self):
-        # the base query that does everything
-        self.query = {
-            "query" : {
-                "filtered": {
-                    "query" : {
-                        "bool" : {
-                            "must" : []
-                        }
-                    },
-                    "filter" : {
-                        "script" : {
-                            "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
-                        }
-                    }
-                }
-            },
-            "size" : 10000,
-            "facets" : {
-                "collaborators" : {
-                    "terms_stats" : {
-                        "key_field" : "collaboratorOrganisation.canonical.exact",
-                        "value_field" : "project.fund.valuePounds",
-                        "size" : 0 # for terms_stats, this means "get all of them" (not the same as a normal terms facets)
+    # the base query upon which the report is broadly based
+    base_query = {
+        "query" : {
+            "filtered": {
+                "query" : {
+                    "bool" : {
+                        "must" : []
                     }
                 },
-                "funders" : {
-                    "terms_stats" : {
-                        "key_field" : "primaryFunder.name.exact",
-                        "value_field" : "project.fund.valuePounds",
-                        "size" : 0
-                    }
-                },
-                "value_stats" : {
-                    "statistical" : {
-                        "field" : "project.fund.valuePounds"
+                "filter" : {
+                    "script" : {
+                        "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
                     }
                 }
             }
+        },
+        "size" : 10000,
+        "facets" : {
+            "collaborators" : {
+                "terms_stats" : {
+                    "key_field" : "collaboratorOrganisation.canonical.exact",
+                    "value_field" : "project.fund.valuePounds",
+                    "size" : 0 # for terms_stats, this means "get all of them" (not the same as a normal terms facets)
+                }
+            },
+            "funders" : {
+                "terms_stats" : {
+                    "key_field" : "primaryFunder.name.exact",
+                    "value_field" : "project.fund.valuePounds",
+                    "size" : 0
+                }
+            },
+            "value_stats" : {
+                "statistical" : {
+                    "field" : "project.fund.valuePounds"
+                }
+            }
         }
+    }
+    
+    def __init__(self):
+        # the copy of the base query that we'll be working with
+        self.query = deepcopy(self.base_query)
+    
+    def add_field(self, field):
+        if "fields" not in self.query:
+            self.query["fields"] = []
+        if field not in self.query["fields"]:
+            self.query["fields"].append(field)
     
     def set_size(self, size):
         self.query["size"] = size
@@ -414,9 +442,6 @@ class CollaborationQuery(object):
     
     def set_terms_stats_size(self, name, size):
         self.query["facets"][name]["terms_stats"]["size"] = size
-    
-    def constrain_collaborator_facet_to_type(self):
-        pass
     
     def add_terms_facet(self, name, field, size):
         f = deepcopy(self.terms)
