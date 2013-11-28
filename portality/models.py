@@ -12,12 +12,22 @@ Look in the dao.py to learn more about the default methods available to the Doma
 When using portality in your own flask app, perhaps better to make your own models file somewhere and copy these examples
 '''
 
+##########################################################################
+# System Configuration
+##########################################################################
+
 #  a config indextype simply for storing config vars
 class Config(DomainObject):
     __type__ = 'config'
 
 
+##########################################################################
 # Raw GtR models
+##########################################################################
+# These model objects speak to the GtR raw index which is a clone of any
+# data that we collect from their API
+##########################################################################
+
 class Project(DomainObject):
     __type__ = "project"
     INDEX = app.config.get('GTR_INDEX','gtr')
@@ -71,6 +81,13 @@ class CerifClass(DomainObject):
     __type__ = "cerifclass"
     INDEX = app.config.get('GTR_INDEX','gtr')
 
+
+##############################################################################
+# Alternate index models
+##############################################################################
+# These classes represent the two possible indexes that we might index into
+##############################################################################
+
 class RecordA(DomainObject):
     __type__ = "record"
     INDEX = 'g4hea'
@@ -78,6 +95,13 @@ class RecordA(DomainObject):
 class RecordB(DomainObject):
     __type__ = "record"
     INDEX = 'g4heb'
+
+##############################################################################
+# Core Record object
+##############################################################################
+# This object represents the actual G4HE records, and provides an API through
+# which to interact with the content for the purposes of reporting
+##############################################################################
 
 class Record(DomainObject):
     __type__ = "record"
@@ -109,27 +133,16 @@ class Record(DomainObject):
 
     def ordered_collaborators(self, mainorg, count, collaboration_definition, start=None):
         q = CollaborationQuery()
-        # q.set_size(0) # we don't need any project results
         q.set_main_org(mainorg)
         
         # start date
         if start != "" and start is not None:
             q.set_start(start)
         
-        # determine the size of the result set we want.  Note that due to a bug in 
-        # Elasticsearch, we actually want to make this much bigger than the requirement (so we add 10000)
-        #excess = 10000
-        #size = count + 1 + excess if count != 0 else 0
-        #q.set_terms_stats_size("collaborators", size)
+        # we make the initial request very large - much larger than it ought
+        # ever need to be, just because there isn't an ES size which means "everything"
         size = 10000
         q.set_size(size)
-        
-        # add each of the collaboration definition facets
-        #for cd in collaboration_definition:
-        #    mapped = self.definition_map.get(cd)
-        #    if mapped is None:
-        #        continue
-        #    q.add_terms_facet(cd, mapped, size)
         
         # add only the fields that we are interested in
         q.add_field("project.fund.valuePounds")
@@ -144,6 +157,9 @@ class Record(DomainObject):
         result = self.query(q=q.query)
         
         # make sure we got everything
+        # This is a catch just in case the massive size above isn't enough.  If we
+        # wind up hitting this, the reality is that we need to change the way we
+        # do this query, as this would be quite inefficient
         total = result.get("hits", {}).get("total")
         if total > size:
             q.set_size(total)
@@ -204,18 +220,22 @@ class Record(DomainObject):
         return terms
         
     def all_funders(self):
-        q = deepcopy(all_funders_template)
-        result = self.query(q=q)
+        q = InfoQuery()
+        q.add_all_funders()
+        result = self.query(q=q.query)
         terms = result.get("facets", {}).get("funders", {}).get("terms", [])
         return terms
     
     def grant_categories(self):
-        q = deepcopy(grant_categories_template)
-        result = self.query(q=q)
+        q = InfoQuery()
+        q.add_grant_categories()
+        result = self.query(q=q.query)
         terms = result.get("facets", {}).get("categories", {}).get("terms", [])
         return terms
 
-    def collaboration_report(self, mainorg, collaboration_definition, funder=None, collab_orgs=[], start=None, end=None, lower=None, upper=None, category=None, status=None):
+    def collaboration_report(self, mainorg, collaboration_definition, 
+                                funder=None, collab_orgs=[], start=None, end=None, 
+                                lower=None, upper=None, category=None, status=None):
         q = CollaborationQuery()
         q.set_main_org(mainorg)
         
@@ -268,10 +288,20 @@ class Record(DomainObject):
         report = CollaborationReport(result, collaboration_definition)
         return report
 
-# Collaboration Report object
-##################################################################################
+##############################################################################
+# Collaboration Report objects
+##############################################################################
+# These classes provide support for abstract representations of the
+# collaboration report and for the queries needed by that report
+##############################################################################
 
 class CollaborationReport(object):
+    """
+    An object which wraps an ES result object for the list of projects
+    returned by a collaboration report request
+    """
+    
+    # map of collaboration definitions from outside to names of fields in the index
     definition_map = {
         "leadro" : "leadRo",
         "principal_investigator" : "principalInvestigator",
@@ -362,10 +392,14 @@ class CollaborationReport(object):
     def funders_facet(self):
         return self.raw.get("facets", {}).get("funders", {}).get("terms", [])
 
-# Collaboration Query manager
-##################################################################################
 
 class CollaborationQuery(object):
+    """
+    This class provides an interface to the complex ES query that is required
+    in order to query for collaborators.  Callers who wish to do stuff with
+    collaborations should use this object only in order to make their requests.
+    """
+    
     # collaboration specific query templates
     org_template = { "term" : {"collaboratorOrganisation.canonical.exact" : None} }
     funder_template = { "term" : {"primaryFunder.name.exact" : None} }
@@ -492,127 +526,47 @@ class CollaborationQuery(object):
         qs['term']['project.status.exact'] = status
         self.query['query']['filtered']['query']['bool']['must'].append(qs)
 
-# Query Templates
-##################################################################################
+##############################################################################
+# Small Query Managers
+##############################################################################
+# Objects which represent different kinds of queries that need to be done
+# against the dataset
+##############################################################################
 
-# collaborator organisation template.
-# Used where a term query to exactly match the organisation name is needed
-#
-query_org_template = {
-    "term" : {"collaboratorOrganisation.canonical.exact" : None}
-}
-
-# funding organisation template
-# Used where a term query to exactly match the primary funder's name is needed
-
-query_funder_template = {
-    "term" : {"primaryFunder.name.exact" : None}
-}
-
-# I know these two look like they're the wrong way round, but they are not.
-query_end_template = {
-    "range" : {
-        "project.fund.start" : {
-            "to" : "<end of range>"
+class InfoQuery(object):
+    """
+    Query manager that handles general information about the content of the
+    index
+    """
+    
+    funders_facet = {"terms": {"field" : "primaryFunder.name.exact", "all_terms" : True}}
+    grant_categories = {"terms" : {"field" : "project.grantCategory.exact", "all_terms" : True}}
+    
+    base_query = {
+        "query" : {
+            "match_all" : {}
         }
     }
-}
+    
+    def __init__(self):
+        self.query = deepcopy(self.base_query)
 
-query_start_template = {
-    "range" : {
-        "project.fund.end" : {
-            "from" : "<start of range>"
-        }
-    }
-}
+    def add_all_funders(self):
+        if "facets" not in self.query:
+            self.query["facets"] = {}
+        self.query["facets"]["funders"] = deepcopy(self.funders_facet)
+    
+    def add_grant_categories(self):
+        if "facets" not in self.query:
+            self.query["facets"] = {}
+        self.query["facets"]["categories"] = deepcopy(self.grant_categories)
 
-query_lower_template = {
-    "range" : {
-        "project.fund.valuePounds" : {
-            "from" : "<lower limit of funding>"
-        }
-    }
-}
 
-query_upper_template = {
-    "range" : {
-        "project.fund.valuePounds" : {
-            "to" : "<upper limit of funding>"
-        }
-    }
-}
-
-# Main Collaborator query
-# Used to retrieve all collaboration information in one huge hit
-#
-query_template = {
-    "query" : {
-        "filtered": {
-            "query" : {
-                "bool" : {
-                    "must" : []
-                }
-            },
-            "filter" : {
-                "script" : {
-                    "script" : "doc['collaboratorOrganisation.canonical.exact'].values.size() > 1"
-                }
-            }
-        }
-    },
-    "size" : 10000,
-    "facets" : {
-        "collaborators" : {
-            "terms_stats" : {
-                "key_field" : "collaboratorOrganisation.canonical.exact",
-                "value_field" : "project.fund.valuePounds",
-                "size" : 0
-            }
-        },
-        "funders" : {
-            "terms_stats" : {
-                "key_field" : "primaryFunder.name.exact",
-                "value_field" : "project.fund.valuePounds",
-                "size" : 0
-            }
-        },
-        "value_stats" : {
-            "statistical" : {
-                "field" : "project.fund.valuePounds"
-            }
-        }
-    }
-}
-
-all_funders_template = {
-    "query" : {
-        "match_all" : {}
-    },
-    "size" : 0,
-    "facets" : {
-        "funders" : {
-            "terms" : {
-                "field" : "primaryFunder.name.exact",
-                "all_terms" : True
-            }
-        }
-    }
-}
-
-grant_categories_template = {
-    "query" : {
-        "match_all" : {}
-    },
-    "size" : 0,
-    "facets" : {
-        "categories" : {
-            "terms" : {
-                "field" : "project.grantCategory.exact",
-                "all_terms" : True
-            }
-        }
-    }
-}
+#############################################################################
+# Accounts/User objects
+#############################################################################
+# These objects help us manage users of the system
+#############################################################################
 
 
 # The account object, which requires the further additional imports
