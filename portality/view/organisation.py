@@ -11,13 +11,18 @@ import json, csv, StringIO, time, os, requests
 
 blueprint = Blueprint('organisation', __name__)
 
+#####################################################################
 # base organisation api
 #####################################################################
 
 @blueprint.route("/")
 def organisations():
-
+    """
+    Any request to the base of the organisations url space
+    """
+    
     if 'q' in request.values:
+        # FIXME: should be in the models layer
         query = {
             "query" : {
                 "query_string" : {
@@ -56,6 +61,10 @@ def organisations():
 @blueprint.route("/<mainorg>")
 @blueprint.route("/<mainorg>.json")
 def organisation(mainorg, raw=False):
+    """
+    Any request to a specific organisation's home page
+    """
+    
     # TODO:
     # list all this orgs projects
     # list a blurb and website about this org
@@ -74,6 +83,7 @@ def organisation(mainorg, raw=False):
     #    logo = '/static/logos/' + logo
     logo = ""
 
+    # FIXME: should be in the models layer
     qry = {
         "query": {
             "term": {
@@ -119,8 +129,11 @@ def organisation(mainorg, raw=False):
 
 
 
-
+#####################################################################
 # matching report
+#####################################################################
+# Web API endpoints associated with the matching/New Potential 
+# Report
 #####################################################################
 
 @blueprint.route("/<mainorg>/matching", methods=["GET", "POST"])
@@ -283,13 +296,11 @@ def matching(mainorg, suffix=None):
 
 
 
-
-
-
-
-
-
-# benchmarking report
+#####################################################################
+# General utilities
+#####################################################################
+# Web API endpoints which provide generally useful functions for
+# the front-end
 #####################################################################
 
 @blueprint.route("/<mainorg>/allfunders")
@@ -307,6 +318,24 @@ def grantcategories(mainorg=None):
     resp = make_response(json.dumps(funders))
     resp.mimetype = "application/json"
     return resp
+
+def _make_csv(name, headers, rows):
+    output = StringIO.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    resp = make_response(output.getvalue())
+    resp.mimetype = "text/csv"
+    resp.headers['Content-Disposition'] = 'attachment; filename="' + name + '.csv"'
+    return resp
+
+
+#####################################################################
+# benchmarking report
+#####################################################################
+# Web API endpoints associated with the benchmarking report
+#####################################################################
 
 # FIXME: this is a near-straight copy of the valueCount report, with a different
 # query and different thing returned, but all the guts are the same.  This stuff
@@ -771,28 +800,19 @@ query_upper_template = {
     }
 }
 
-#####################################################################
-
-def _make_csv(name, headers, rows):
-    output = StringIO.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(headers)
-    for row in rows:
-        writer.writerow(row)
-    resp = make_response(output.getvalue())
-    resp.mimetype = "text/csv"
-    resp.headers['Content-Disposition'] = 'attachment; filename="' + name + '.csv"'
-    return resp
-
-
-
-
+######################################################################
 # collaboration report
+######################################################################
+# Wep API endpoints for constructing the collaboration report
 ######################################################################
 
 @blueprint.route("/<mainorg>/collaboration/top")
 @blueprint.route("/<mainorg>/collaboration/top.<form>")
 def top(mainorg=None, form="json"):
+    """
+    List the top collaborators for the mainorg
+    """
+    
     # extract the values from the request
     count = int(request.values.get("count", 0))
     defn = request.values.get("collaboration_definition")
@@ -802,7 +822,6 @@ def top(mainorg=None, form="json"):
     else:
         collaboration_definition = [d.strip() for d in defn.split(",")]
     start = request.values.get("start")
-    
     
     # pass the parameters to the Record model
     c = models.Record()
@@ -827,6 +846,9 @@ def top(mainorg=None, form="json"):
 @blueprint.route("/<mainorg>/collaboration/funders")
 @blueprint.route("/<mainorg>/collaboration/funders.<form>")
 def funders(mainorg=None, form="json"):
+    """
+    All the funders for the mainorg
+    """
     # extract the values from the request
     start = request.values.get("start")
     
@@ -848,7 +870,10 @@ def funders(mainorg=None, form="json"):
 
 @blueprint.route('/<mainorg>/collaboration')
 def collaboration(mainorg=None):
-            
+    """
+    The main function for generating the collaboration report
+    """
+    
     # allowable parameters of the report
     funder = request.values.get("funder")
     start = request.values.get("start")
@@ -882,8 +907,6 @@ def collaboration(mainorg=None):
     except ValueError:
         # do nothing, it's fine
         pass
-    
-    # print funder, start, end, lower, upper, collab_orgs, result_format, collaboration_definition
     
     # if we've been asked for the landing page for the collaboration report,
     # don't bother doing any of the hard work
@@ -958,24 +981,12 @@ def collaboration(mainorg=None):
                 row["piOrganisation"] = ""
             
             report.append(row)
-    """
-    # format the numbers in the facets
-    for f in facets.get("collaborators", {}).get("terms"):
-        f['formatted_total'] = "{:,.0f}".format(f['total'])
     
-    # format the numbers for the value stats
-    facets['value_stats']['formatted_total'] = "{:,.0f}".format(facets.get("value_stats", {}).get("total", 0))
-    
-    # format the numbers for the funders
-    for f in facets.get("funders", {}).get("terms"):
-        f['formatted_total'] = "{:,.0f}".format(f['total'])
-    """
     data = {
         "rows" : report,
         "collaborators" : collaboration_report.collaborators_facet(),
         "value_stats" : collaboration_report.value_stats(),
         "funders" : collaboration_report.funders_facet(),
-        # "facets" : facets,
         "count" : collaboration_report.count()
     }
     
