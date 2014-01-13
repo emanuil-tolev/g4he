@@ -337,78 +337,40 @@ def _make_csv(name, headers, rows):
 # Web API endpoints associated with the benchmarking report
 #####################################################################
 
-# FIXME: this is a near-straight copy of the valueCount report, with a different
-# query and different thing returned, but all the guts are the same.  This stuff
-# is becoming in urgent need of a refactor
-@blueprint.route("/<mainorg>/benchmarking/details", methods=["POST"])
-def details(mainorg=None):
-    j = request.json
-    benchmark = {"parameters" : j, "report" : {}}
-    
-    q = deepcopy(projects_query_template)
-    
+"""
+Benchmarking report parameters objects have the following shape
+
+    {
+        "mainorg" : "<primary organisation>",
+        "type" : "<report type: publications|award_value|num_projects>",
+        "granularity" : "<month|quarter|year>",
+        "start" : "<report start date>",
+        "end" : "<report end date>",
+        "funder" : "<funder constraint>",
+        "grantcategory" : "<grant category constraint>",
+        "leadonly" : <true|false>,
+        "compare_org" : [<list of organisations to benchmark (may include mainorg)>],
+        "compare_groups" : {
+            "<group name>" : [<list of person names in this group>] 
+        }
+    }
+
+"""
+
+def _sanitise_benchmark_parameters(j):
     start = j.get("start")
     end = j.get("end")
     
     try:
         if start is not None:
-            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
+            j["start"] = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
         if end is not None:
-            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
+            j["end"] = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
     except ValueError:
-        # do nothing, it's fine
+        # do nothing, values should be correctly formatted
         pass
-    
-    # build in the standard parts of the query
-    if j.get("start", "") != "":
-        qs = deepcopy(b_query_start_template)
-        qs['range']['project.fund.start']['from'] = start
-        q['query']['bool']['must'].append(qs)
-    
-    if j.get("end", "") != "":
-        qe = deepcopy(b_query_end_template)
-        qe['range']['project.fund.start']['to'] = end
-        q['query']['bool']['must'].append(qe)
-    
-    if j.get("funder", "") != "":
-        qf = deepcopy(query_funder_template)
-        qf["term"]["primaryFunder.name.exact"] = j.get("funder")
-        q['query']['bool']['must'].append(qf)
         
-    if j.get("grantcategory", "") != "":
-        qg = deepcopy(b_grant_category_template)
-        qg["term"]["project.grantCategory.exact"] = j.get("grantcategory")
-        q['query']['bool']['must'].append(qg)
-    
-    # for each of the additional orgs, do the same query with the different org
-    for o in j.get("compare_org", []):
-        org_query = deepcopy(q)
-        if j.get("leadonly", False):
-            qo = deepcopy(leadro_template)
-            qo['term']["leadRo.name.exact"] = o
-            org_query['query']['bool']['must'].append(qo)
-        else:
-            qo = deepcopy(query_org_template)
-            qo['term']["collaboratorOrganisation.canonical.exact"] = o
-            org_query['query']['bool']['must'].append(qo)
-        # print json.dumps(org_query)
-        compare_result = models.Record.query(q=org_query)
-        benchmark["report"][o] = [hit.get("_source", {}) for hit in compare_result.get("hits", {}).get("hits", [])]
-        
-    # for each of the groups of people do the group query
-    for gname, people in j.get("compare_groups", {}).iteritems():
-        pers_query = deepcopy(q)
-        qp = deepcopy(b_group_template)
-        for person in people:
-            qp["terms"]["collaboratorPerson.canonical.exact"].append(person)
-        pers_query["query"]["bool"]["must"].append(qp)
-        result = models.Record.query(q=pers_query)
-        benchmark["report"][gname] = [hit.get("_source", {}) for hit in compare_result.get("hits", {}).get("hits", [])]
-    
-    # now make the response
-    resp = make_response(json.dumps(benchmark))
-    resp.mimetype = "application/json"
-    return resp
+    return j
 
 @blueprint.route("/<mainorg>/benchmarking", methods=["GET", "POST"])
 @blueprint.route("/<mainorg>/benchmarking.<suffix>", methods=["GET"])
@@ -423,21 +385,54 @@ def GET_benchmarking(mainorg, returntype):
     if returntype == "html":
         return render_template('organisation/bench.html', mainorg=mainorg)
     elif returntype == "csv":
+        # get the report parameters out of the request
         j = request.values.get("obj")
         obj = json.loads(j)
-        benchmark = {"parameters" : obj, "report" : {}}
-        return _get_csv(mainorg, benchmark)
+        obj = _sanitise_benchmark_parameters(obj)
         
-def _get_csv(mainorg, benchmark):
-    # call generic method to calculate the benchmarking data
-    _populate_benchmark(mainorg, benchmark)
+        # generate the report itself
+        b = models.Record()
+        report = b.benchmark(**obj)
+        output = _to_csv(report, obj.get("type"))
+        
+        resp = make_response(output.getvalue())
+        resp.mimetype = "text/csv"
+        resp.headers['Content-Disposition'] = 'attachment; filename="' + mainorg + '_benchmarking_report.csv"'
+        return resp
+        
+        #benchmark = {"parameters" : obj, "report" : {}}
+        #return _get_csv(mainorg, benchmark)
 
+def POST_benchmarking(mainorg):
+    j = _sanitise_benchmark_parameters(request.json)
+    b = models.Record()
+    report = b.benchmark(**j)
+    
+    # now make the response
+    benchmark = {"parameters" : j, "report" : report}
+    resp = make_response(json.dumps(benchmark))
+    resp.mimetype = "application/json"
+    return resp
+
+@blueprint.route("/<mainorg>/benchmarking/details", methods=["POST"])
+def details(mainorg=None):
+    j = _sanitise_benchmark_parameters(request.json)
+    b = models.Record()
+    report = b.benchmark_details(**j)
+    
+    # now make the response
+    benchmark = {"parameters" : j, "report" : report}
+    resp = make_response(json.dumps(benchmark))
+    resp.mimetype = "application/json"
+    return resp
+
+def _to_csv(report, type):
     value_field = "count"
     date_field = "time"
-    if benchmark["parameters"]["type"] == "award_value":
+    if type == "award_value":
         value_field = "total"
     
-    rows, dates, orgs = _get_report_rows(benchmark["report"], value_field=value_field, date_field=date_field)
+    rows, dates, orgs = _get_report_rows(report, value_field=value_field, date_field=date_field)
 
     output = StringIO.StringIO()
     writer = csv.writer(output)
@@ -448,18 +443,7 @@ def _get_csv(mainorg, benchmark):
         formatted = [time.strftime("%Y-%m-%d", time.gmtime(row[0]/1000))] + row[1:]
         writer.writerow(formatted)
     
-    resp = make_response(output.getvalue())
-    resp.mimetype = "text/csv"
-    resp.headers['Content-Disposition'] = 'attachment; filename="' + mainorg + '_benchmarking_report.csv"'
-    return resp
-
-def _populate_benchmark(mainorg, benchmark):
-    # there are three different kinds of report, and we require
-    # two different queries to service them
-    if benchmark["parameters"]["type"] == "publications":
-        _publicationsReport(mainorg, benchmark["parameters"], benchmark)
-    else:
-        _valueCountReport(mainorg, benchmark["parameters"], benchmark)
+    return output
 
 def _get_report_rows(data, value_field="count", date_field="time"):
     dates = []
@@ -487,318 +471,6 @@ def _get_report_rows(data, value_field="count", date_field="time"):
         rows.append(row)
     
     return rows, dates, orgs
-
-def POST_benchmarking(mainorg):
-    j = request.json
-    benchmark = {"parameters" : j, "report" : {}}
-    
-    # call generic method to actually calculate the businesss
-    _populate_benchmark(mainorg, benchmark)
-    
-    # now make the response
-    resp = make_response(json.dumps(benchmark))
-    resp.mimetype = "application/json"
-    return resp
-
-def _publicationsReport(mainorg, j, benchmark):
-    q = deepcopy(publications_query_template)
-    
-    start = j.get("start")
-    end = j.get("end")
-    
-    try:
-        if start is not None:
-            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
-        if end is not None:
-            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
-    except ValueError:
-        # do nothing, it's fine
-        pass
-    
-    # build in the standard parts of the query
-    if j.get("start", "") != "":
-        qs = deepcopy(b_publication_from_template)
-        qs['range']['project.publication.date']['from'] = start
-        q['query']['bool']['must'].append(qs)
-    
-    if j.get("end", "") != "":
-        qe = deepcopy(b_publication_to_template)
-        qe['range']['project.publication.date']['to'] = end
-        q['query']['bool']['must'].append(qe)
-    
-    if j.get("granularity", "") != "":
-        if j.get("granularity") in ["month", "quarter", "year"]:
-            q['facets']['publication_dates']['date_histogram']['interval'] = j.get("granularity")
-    
-    if j.get("funder", "") != "":
-        qf = deepcopy(query_funder_template)
-        qf["term"]["primaryFunder.name.exact"] = j.get("funder")
-        q['query']['bool']['must'].append(qf)
-    
-    if j.get("grantcategory", "") != "":
-        qg = deepcopy(b_grant_category_template)
-        qg["term"]["project.grantCategory.exact"] = j.get("grantcategory")
-        q['query']['bool']['must'].append(qg)
-    
-    lower_time = -1 if j.get("start", "") == "" else int(time.mktime(time.strptime(j.get("start"), "%Y-%m-%d"))) * 1000
-    upper_time = -1 if j.get("end", "") == "" else int(time.mktime(time.strptime(j.get("end"), "%Y-%m-%d"))) * 1000
-    
-    for org in j.get("compare_org", []):
-        _publicationsBenchmarkOrg(q, org, j.get("leadonly", False), lower_time, upper_time, benchmark)
-    
-    # for each of the groups of people do the group query
-    for gname, people in j.get("compare_groups", {}).iteritems():
-        _publicationsBenchmarkGroup(q, gname, people, lower_time, upper_time, benchmark)
-
-def _publicationsBenchmarkGroup(base_query, gname, people, lower_time, upper_time, benchmark):
-    query = deepcopy(base_query)
-    qp = deepcopy(b_group_template)
-    
-    for person in people:
-        qp["terms"]["collaboratorPerson.canonical.exact"].append(person)
-    query["query"]["bool"]["must"].append(qp)
-    
-    result = models.Record.query(q=query)
-    entries = result.get("facets", {}).get("publication_dates", {}).get("entries")
-    
-    _trimTimesAndAdd(gname, entries, lower_time, upper_time, benchmark)
-
-def _publicationsBenchmarkOrg(base_query, org, leadonly, lower_time, upper_time, benchmark):
-    query = deepcopy(base_query)
-    
-    if leadonly:
-        qo = deepcopy(leadro_template)
-        qo['term']["leadRo.name.exact"] = org
-        query['query']['bool']['must'].append(qo)
-    else:
-        qo = deepcopy(query_org_template)
-        qo['term']["collaboratorOrganisation.canonical.exact"] = org
-        query['query']['bool']['must'].append(qo)
-    
-    result = models.Record.query(q=query)
-    entries = result.get("facets", {}).get("publication_dates", {}).get("entries")
-    
-    _trimTimesAndAdd(org, entries, lower_time, upper_time, benchmark)
-
-def _trimTimesAndAdd(name, entries, lower_time, upper_time, benchmark):
-    if lower_time > -1 or upper_time > -1:
-        valid_entries = []
-        for entry in entries:
-            # print entry["time"]
-            if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
-                # print "valid"
-                valid_entries.append(entry)
-        benchmark["report"][name] = valid_entries
-    else:
-        benchmark["report"][name] = entries
-
-def _valueCountReport(mainorg, j, benchmark):
-    q = deepcopy(valuecount_query_template)
-    
-    start = j.get("start")
-    end = j.get("end")
-    
-    try:
-        if start is not None:
-            start = datetime.strftime(datetime.strptime(start, "%d/%m/%Y"), "%Y-%m-%d")
-        if end is not None:
-            end = datetime.strftime(datetime.strptime(end, "%d/%m/%Y"), "%Y-%m-%d")
-    except ValueError:
-        # do nothing, it's fine
-        pass
-    
-    # build in the standard parts of the query
-    if j.get("start", "") != "":
-        qs = deepcopy(b_query_start_template)
-        qs['range']['project.fund.start']['from'] = start
-        q['query']['bool']['must'].append(qs)
-    
-    if j.get("end", "") != "":
-        qe = deepcopy(b_query_end_template)
-        qe['range']['project.fund.start']['to'] = end
-        q['query']['bool']['must'].append(qe)
-    
-    if j.get("granularity", "") != "":
-        if j.get("granularity") in ["month", "quarter", "year"]:
-            q['facets']['award_values']['date_histogram']['interval'] = j.get("granularity")
-    
-    if j.get("funder", "") != "":
-        qf = deepcopy(query_funder_template)
-        qf["term"]["primaryFunder.name.exact"] = j.get("funder")
-        q['query']['bool']['must'].append(qf)
-        
-    if j.get("grantcategory", "") != "":
-        qg = deepcopy(b_grant_category_template)
-        qg["term"]["project.grantCategory.exact"] = j.get("grantcategory")
-        q['query']['bool']['must'].append(qg)
-    
-    # for each of the additional orgs, do the same query with the different org
-    for o in j.get("compare_org", []):
-        org_query = deepcopy(q)
-        if j.get("leadonly", False):
-            qo = deepcopy(leadro_template)
-            qo['term']["leadRo.name.exact"] = o
-            org_query['query']['bool']['must'].append(qo)
-        else:
-            qo = deepcopy(query_org_template)
-            qo['term']["collaboratorOrganisation.canonical.exact"] = o
-            org_query['query']['bool']['must'].append(qo)
-        # print json.dumps(org_query)
-        compare_result = models.Record.query(q=org_query)
-        benchmark["report"][o] = compare_result.get("facets", {}).get("award_values", {}).get("entries")
-        
-    # for each of the groups of people do the group query
-    for gname, people in j.get("compare_groups", {}).iteritems():
-        pers_query = deepcopy(q)
-        qp = deepcopy(b_group_template)
-        for person in people:
-            qp["terms"]["collaboratorPerson.canonical.exact"].append(person)
-        pers_query["query"]["bool"]["must"].append(qp)
-        result = models.Record.query(q=pers_query)
-        benchmark["report"][gname] = result.get("facets", {}).get("award_values", {}).get("entries")
-
-leadro_template = {
-    "term" : {"leadRo.name.exact" : None}
-}
-
-b_grant_category_template = {
-    "term" : {"project.grantCategory.exact" : None}
-}
-
-projects_query_template = {
-    "query" : {
-        "bool" : {
-        	"must" : []
-        }
-    },
-    "size" : 1000 # a suitably large number
-}
-
-publications_query_template = {
-    "query" : {
-        "bool" : {
-        	"must" : []
-        }
-    },
-    "size" : 0,
-    "facets" : {
-        "publication_dates" : {
-            "date_histogram" : {
-                "field" : "project.publication.date",
-                "interval" : "quarter"
-            }
-        }
-    }
-}
-
-b_publication_to_template = {
-    "range" : {
-        "project.publication.date" : {
-            "to" : "<end of range>"
-        }
-    }
-}
-
-b_publication_from_template = {
-    "range" : {
-        "project.publication.date" : {
-            "from" : "<start of range>"
-        }
-    }
-}
-
-
-valuecount_query_template = {
-    "query" : {
-        "bool" : {
-        	"must" : []
-        }
-    },
-    "size" : 0,
-    "facets" : {
-        "award_values" : {
-            "date_histogram" : {
-                "key_field" : "project.fund.start",
-                "value_field" : "project.fund.valuePounds",
-                "interval" : "quarter"
-            }
-        }
-    }
-}
-
-b_query_end_template = {
-    "range" : {
-        "project.fund.start" : {
-            "to" : "<end of range>"
-        }
-    }
-}
-
-b_query_start_template = {
-    "range" : {
-        "project.fund.start" : {
-            "from" : "<start of range>"
-        }
-    }
-}
-
-b_group_template = {
-	"terms" : {
-		"collaboratorPerson.canonical.exact" : []
-	}
-}
-
-#############################################################################
-
-# more templates - these can be removed when the benchmarking report is
-# refactored to properly encapsulate the ES connection
-
-# collaborator organisation template.
-# Used where a term query to exactly match the organisation name is needed
-#
-query_org_template = {
-    "term" : {"collaboratorOrganisation.canonical.exact" : None}
-}
-
-# funding organisation template
-# Used where a term query to exactly match the primary funder's name is needed
-
-query_funder_template = {
-    "term" : {"primaryFunder.name.exact" : None}
-}
-
-# I know these two look like they're the wrong way round, but they are not.
-query_end_template = {
-    "range" : {
-        "project.fund.start" : {
-            "to" : "<end of range>"
-        }
-    }
-}
-
-query_start_template = {
-    "range" : {
-        "project.fund.end" : {
-            "from" : "<start of range>"
-        }
-    }
-}
-
-query_lower_template = {
-    "range" : {
-        "project.fund.valuePounds" : {
-            "from" : "<lower limit of funding>"
-        }
-    }
-}
-
-query_upper_template = {
-    "range" : {
-        "project.fund.valuePounds" : {
-            "to" : "<upper limit of funding>"
-        }
-    }
-}
 
 ######################################################################
 # collaboration report
