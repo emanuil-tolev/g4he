@@ -129,7 +129,29 @@ class Record(DomainObject):
         if layer == 'index': return t
 
         return t + cls.__type__ + '/'
-
+    
+    #######################################################################
+    # methods for general information
+    #######################################################################
+    
+    def all_funders(self):
+        q = InfoQuery()
+        q.add_all_funders()
+        result = self.query(q=q.query)
+        terms = result.get("facets", {}).get("funders", {}).get("terms", [])
+        return terms
+    
+    def grant_categories(self):
+        q = InfoQuery()
+        q.add_grant_categories()
+        result = self.query(q=q.query)
+        terms = result.get("facets", {}).get("categories", {}).get("terms", [])
+        return terms
+    #######################################################################
+    
+    #######################################################################
+    # methods used for collaboration reports
+    #######################################################################
 
     def ordered_collaborators(self, mainorg, count, collaboration_definition, start=None):
         q = CollaborationQuery()
@@ -219,20 +241,6 @@ class Record(DomainObject):
         
         return terms
         
-    def all_funders(self):
-        q = InfoQuery()
-        q.add_all_funders()
-        result = self.query(q=q.query)
-        terms = result.get("facets", {}).get("funders", {}).get("terms", [])
-        return terms
-    
-    def grant_categories(self):
-        q = InfoQuery()
-        q.add_grant_categories()
-        result = self.query(q=q.query)
-        terms = result.get("facets", {}).get("categories", {}).get("terms", [])
-        return terms
-
     def collaboration_report(self, mainorg, collaboration_definition, 
                                 funder=None, collab_orgs=[], start=None, end=None, 
                                 lower=None, upper=None, category=None, status=None):
@@ -288,63 +296,11 @@ class Record(DomainObject):
         report = CollaborationReport(result, collaboration_definition)
         return report
     
-    def benchmark_details(self, mainorg=None, type=None, granularity="monthly", 
-                        start=None, end=None, funder=None, grantcategory=None, 
-                        leadonly=False, compare_org=None, compare_groups=None):
-        
-        # sanitise some of the input
-        compare_org = [] if compare_org is None else compare_org
-        compare_groups = {} if compare_groups is None else compare_groups
-        
-        # set up the objects we are going to work with
-        benchmark = {}
-        common_query = BenchmarkingQuery("results_only")
-        
-        # start date
-        if start != "" and start is not None:
-            common_query.set_project_start(start)
-            
-        # end date 
-        if end != "" and end is not None:
-            common_query.set_project_end(end)
-        
-        # funder 
-        if funder != "" and funder is not None:
-            common_query.set_funder(funder)
-        
-        # grant category
-        if grantcategory != "" and grantcategory is not None:
-            common_query.set_grantcategory(grantcategory)
-        
-        # for each of the additional orgs, do the same query with the different org
-        for org in compare_org:
-            report = self._detailsBenchmarkOrg(common_query, org, leadonly)
-            benchmark[org] = report
-            
-        # for each of the groups of people do the group query
-        for gname, people in compare_groups.iteritems():
-            report = self._detailsBenchmarkGroup(common_query, people)
-            benchmark[gname] = report
-        
-        return benchmark
-        
-    def _detailsBenchmarkGroup(self, base_query, people):
-        q = deepcopy(base_query)
-        q.set_people(people)
-        result = self.query(q=q.query)
-        entries = [hit.get("_source", {}) for hit in result.get("hits", {}).get("hits", [])]
-        return entries
-
-    def _detailsBenchmarkOrg(self, base_query, org, leadonly):
-        q = deepcopy(base_query)
-        if leadonly:
-            q.lead_only(org)
-        else:
-            q.any_collaborator(org)
-        result = self.query(q=q.query)
-        entries = [hit.get("_source", {}) for hit in result.get("hits", {}).get("hits", [])]
-        return entries
-
+    #######################################################################
+    
+    #######################################################################
+    # methods for the benchmarking report
+    #######################################################################
     
     def benchmark(self, mainorg=None, type=None, granularity="monthly", 
                         start=None, end=None, funder=None, grantcategory=None, 
@@ -363,6 +319,34 @@ class Record(DomainObject):
         
         return None
     
+    def benchmark_details(self, mainorg=None, type=None, granularity="monthly", 
+                        start=None, end=None, funder=None, grantcategory=None, 
+                        leadonly=False, compare_org=None, compare_groups=None):
+        
+        # sanitise some of the input
+        compare_org = [] if compare_org is None else compare_org
+        compare_groups = {} if compare_groups is None else compare_groups
+        
+        # set up the objects we are going to work with
+        benchmark = {}
+        common_query = BenchmarkingQuery("results_only")
+        
+        self._add_benchmark_constraints(common_query, project_start=start, 
+                                        project_end=end, funder=funder, 
+                                        grantcategory=grantcategory)
+        
+        # for each of the additional orgs, do the same query with the different org
+        for org in compare_org:
+            report = self._details_benchmark_org(common_query, org, leadonly)
+            benchmark[org] = report
+            
+        # for each of the groups of people do the group query
+        for gname, people in compare_groups.iteritems():
+            report = self._details_benchmark_group(common_query, people)
+            benchmark[gname] = report
+        
+        return benchmark
+    
     def _publicationsReport(self, mainorg=None, granularity="monthly", 
                         start=None, end=None, funder=None, grantcategory=None, 
                         leadonly=False, compare_org=None, compare_groups=None):
@@ -375,25 +359,9 @@ class Record(DomainObject):
         benchmark = {}
         common_query = BenchmarkingQuery("publications")
         
-        # start date
-        if start != "" and start is not None:
-            common_query.set_publication_start(start)
-            
-        # end date 
-        if end != "" and end is not None:
-            common_query.set_publication_end(end)
-        
-        # granularity
-        if granularity != "" and granularity is not None:
-            common_query.set_granularity(granularity)
-        
-        # funder 
-        if funder != "" and funder is not None:
-            common_query.set_funder(funder)
-        
-        # grant category
-        if grantcategory != "" and grantcategory is not None:
-            common_query.set_grantcategory(grantcategory)
+        self._add_benchmark_constraints(common_query, publication_start=start, 
+                                        publication_end=end, funder=funder, 
+                                        grantcategory=grantcategory, granularity=granularity)
         
         # calculate integer timestamps for the start and end of the histogram, which we will
         # ask the reports to constrain themselves to
@@ -402,50 +370,18 @@ class Record(DomainObject):
         
         # first we get the data for each of the individual organisations being benchmarked
         for org in compare_org:
-            report = self._publicationsBenchmarkOrg(common_query, org, leadonly)
+            report = self._histogram_benchmark_org(common_query, org, leadonly)
             report = self._trim_histogram(report, lower_time, upper_time)
             benchmark[org] = report
         
         # then for each of the groups of people 
         for gname, people in compare_groups.iteritems():
-            report = self._publicationsBenchmarkGroup(common_query, people)
+            report = self._histogram_benchmark_group(common_query, people)
             report = self._trim_histogram(report, lower_time, upper_time)
             benchmark[gname] = report
         
         return benchmark
-        
-    def _date_to_time(self, date):
-        return -1 if date == "" or date is None else int(time.mktime(time.strptime(date, "%Y-%m-%d"))) * 1000
-
-    def _publicationsBenchmarkGroup(self, base_query, people):
-        q = deepcopy(base_query)
-        q.set_people(people)
-        result = self.query(q=q.query)
-        entries = result.get("facets", {}).get("histogram", {}).get("entries")
-        return entries
-
-    def _publicationsBenchmarkOrg(self, base_query, org, leadonly):
-        q = deepcopy(base_query)
-        if leadonly:
-            q.lead_only(org)
-        else:
-            q.any_collaborator(org)
-        result = self.query(q=q.query)
-        entries = result.get("facets", {}).get("histogram", {}).get("entries")
-        return entries
-
-    def _trim_histogram(self, entries, lower_time, upper_time):
-        if lower_time > -1 or upper_time > -1:
-            valid_entries = []
-            for entry in entries:
-                # print entry["time"]
-                if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
-                    # print "valid"
-                    valid_entries.append(entry)
-            return valid_entries
-        else:
-            return entries
-
+    
     def _valueCountReport(self, mainorg, granularity="monthly", 
                         start=None, end=None, funder=None, grantcategory=None, 
                         leadonly=False, compare_org=None, compare_groups=None):
@@ -457,57 +393,110 @@ class Record(DomainObject):
         # set up the main objects we need to work with here
         benchmark = {}
         common_query = BenchmarkingQuery("value_count")
-    
-        # start date
-        if start != "" and start is not None:
-            common_query.set_project_start(start)
-            
-        # end date 
-        if end != "" and end is not None:
-            common_query.set_project_end(end)
         
-        # granularity
-        if granularity != "" and granularity is not None:
-            common_query.set_granularity(granularity)
-        
-        # funder 
-        if funder != "" and funder is not None:
-            common_query.set_funder(funder)
-        
-        # grant category
-        if grantcategory != "" and grantcategory is not None:
-            common_query.set_grantcategory(grantcategory)
+        self._add_benchmark_constraints(common_query, project_start=start, 
+                                        project_end=end, funder=funder, 
+                                        grantcategory=grantcategory, granularity=granularity)
         
         # for each of the additional orgs, do the same query with the different org
         for org in compare_org:
-            report = self._valueBenchmarkOrg(common_query, org, leadonly)
+            report = self._histogram_benchmark_org(common_query, org, leadonly)
             benchmark[org] = report
             
         # for each of the groups of people do the group query
         for gname, people in compare_groups.iteritems():
-            report = self._publicationsBenchmarkGroup(common_query, people)
+            report = self._histogram_benchmark_group(common_query, people)
             benchmark[gname] = report
             
         return benchmark
+    
+    def _date_to_time(self, date):
+        return -1 if date == "" or date is None else int(time.mktime(time.strptime(date, "%Y-%m-%d"))) * 1000
+    
+    def _details_benchmark_group(self, base_query, people):
+        result = self._do_group_query(base_query, people)
+        entries = [hit.get("_source", {}) for hit in result.get("hits", {}).get("hits", [])]
+        return entries
 
-    def _valueBenchmarkGroup(self, base_query, people):
-        q = deepcopy(base_query)
-        q.set_people(people)
-        result = self.query(q=q.query)
+    def _details_benchmark_org(self, base_query, org, leadonly):
+        result = self._do_org_query(base_query, org, leadonly)
+        entries = [hit.get("_source", {}) for hit in result.get("hits", {}).get("hits", [])]
+        return entries
+
+    def _histogram_benchmark_group(self, base_query, people):
+        result = self._do_group_query(base_query, people)
         entries = result.get("facets", {}).get("histogram", {}).get("entries")
         return entries
 
-    def _valueBenchmarkOrg(self, base_query, org, leadonly):
+    def _histogram_benchmark_org(self, base_query, org, leadonly):
+        result = self._do_org_query(base_query, org, leadonly)
+        entries = result.get("facets", {}).get("histogram", {}).get("entries")
+        return entries
+    
+    def _do_group_query(self, base_query, people):
+        q = deepcopy(base_query)
+        q.set_people(people)
+        result = self.query(q=q.query)
+        return result
+    
+    def _do_org_query(self, base_query, org, leadonly):
         q = deepcopy(base_query)
         if leadonly:
             q.lead_only(org)
         else:
             q.any_collaborator(org)
-        print json.dumps(q.query)
         result = self.query(q=q.query)
-        entries = result.get("facets", {}).get("histogram", {}).get("entries")
-        print entries
-        return entries
+        return result
+    
+    def _trim_histogram(self, entries, lower_time, upper_time):
+        if lower_time > -1 or upper_time > -1:
+            valid_entries = []
+            for entry in entries:
+                # print entry["time"]
+                if entry["time"] >= lower_time and (upper_time == -1 or entry["time"] <= upper_time):
+                    # print "valid"
+                    valid_entries.append(entry)
+            return valid_entries
+        else:
+            return entries
+    
+    def _add_benchmark_constraints(self, query, project_start=None, project_end=None, 
+                                publication_start=None, publication_end=None, funder=None, 
+                                grantcategory=None, granularity=None):
+        """
+        Add the standard set of query constraints, which apply to all queries to the benchmarking
+        report
+        """
+        # project start date
+        if project_start != "" and project_start is not None:
+            query.set_project_start(project_start)
+            
+        # project end date 
+        if project_end != "" and project_end is not None:
+            query.set_project_end(project_end)
+        
+        # funder 
+        if funder != "" and funder is not None:
+            query.set_funder(funder)
+        
+        # grant category
+        if grantcategory != "" and grantcategory is not None:
+            query.set_grantcategory(grantcategory)
+        
+        # publication start date
+        if publication_start != "" and publication_start is not None:
+            query.set_publication_start(publication_start)
+            
+        # publication end date 
+        if publication_end != "" and publication_end is not None:
+            query.set_publication_end(publication_end)
+        
+        # granularity
+        if granularity != "" and granularity is not None:
+            query.set_granularity(granularity)
+    
+        
+    #######################################################################
 
 ##############################################################################
 # Benchmarking Report objects
