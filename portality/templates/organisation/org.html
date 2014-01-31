@@ -5,14 +5,178 @@
 
     <!-- launch graphview -->
     <script type="text/javascript">
-    jQuery(document).ready(function($) {
-    });
+$(document).ready(function() {
+
+    /////////////////////////////////////////////////////////////////////////
+    
+    // collaborations bar chart functions
+    
+    function doGraph(params) {
+        var data = params.data
+        var limit = params.limit ? params.limit : data.length
+        var label_field = params.label_field
+        var value_field = params.value_field
+        var name = params["name"]
+        var selector = params.svg_selector
+        var colour = params.colour
+        
+        var datums = []
+        var bars = {"key" : name, "color" : colour, "values" : []}
+        
+        for (var i = 0; i < data.length && i < limit; i++) {
+            var point = {}
+            point["label"] = data[i][label_field]
+            point["value"] = data[i][value_field]
+            bars.values.push(point)
+        }
+        datums.push(bars)
+        
+        var height = (28 * limit) + 42 + 43
+        $(selector).css("height", height + "px")
+        
+        // generate the graph
+        nv.addGraph(function() {
+            var chart = nv.models.multiBarHorizontalChart()
+              .x(function(d) { return d.label })
+              .y(function(d) { return d.value })
+              .margin({top: 30, right: 30, bottom: 50, left: 175})
+              .showValues(false)
+              .tooltips(true)
+              .showControls(false);
+
+            chart.yAxis
+              .tickFormat(d3.format(',.0f'));
+
+            d3.select(selector)
+              .datum(datums)
+              .transition().duration(500)
+              .call(chart);
+
+            nv.utils.windowResize(chart.update);
+
+            return chart;
+        });
+    }
+    
+    function generateTopCollaboratorsGraph(data, limit) {
+        // generate the default graph
+        doGraph({
+            data: data, 
+            limit: limit, 
+            label_field : "term", 
+            value_field: "count", 
+            name : "Project Count",
+            svg_selector : "#collaboration_highlight_graph_container svg",
+            colour : "#6C3BFF"
+        })
+    }
+    
+    // generate the top list of collaborators
+    function topCollaborators(count) {
+        // we always start by getting the collaboration definition and the range (which we set to the default 4, and current)
+        var cd = ["leadro", "principal_investigator", "co_investigator", "fellow"]
+        var from = $.datepicker.formatDate("yy-mm-dd", new Date())
+        
+        // build the query object
+        var obj = {"count" : count, "collaboration_definition": cd.join(",")};
+        if (from) {
+            obj["start"] = from
+        }
+        
+        $.ajax({
+            type: "GET",
+            url: "/organisation/{{org.name}}/collaboration/top",
+            dataType: "json",
+            data: obj,
+            success : generateCollaboratorGraphClosure(count)
+        })
+    }
+    
+    function generateCollaboratorGraphClosure(count) {
+        return function(data) {
+            generateTopCollaboratorsGraph(data, count)
+        }
+    }
+    
+    // actually generate the collaborators list for the top 10
+    topCollaborators(10)
+    
+    /////////////////////////////////////////////////////////////////////////
+    
+    // funding pie chart functions
+    
+    function doPie(params) {
+        var data = params.data
+        var label_field = params.label_field
+        var value_field = params.value_field
+        var selector = params.svg_selector
+        var name = params["name"]
+        
+        var datums = []
+        var pie = {"key" : name, "values" : []}
+        
+        for (var i = 0; i < data.length; i++) {
+            var helping = {}
+            helping["label"] = data[i][label_field]
+            helping["value"] = data[i][value_field]
+            pie.values.push(helping)
+        }
+        datums.push(pie)
+        
+        $(selector).css("height", "365px")
+        
+        // generate the pie
+        nv.addGraph(function() {
+            var chart = nv.models.pieChart()
+                .x(function(d) { return d.label })
+                .y(function(d) { return d.value })
+                .showLabels(true)
+                .labelThreshold(.05)
+                .donut(true);
+
+            d3.select(selector)
+                .datum(datums)
+                .transition().duration(500)
+                .call(chart);
+    
+            return chart;
+        });
+        
+    }
+    
+    function fundingBreakdown() {
+        var start = $.datepicker.formatDate("yy-mm-dd", new Date())
+        var obj = {"start" : start}
+        $.ajax({
+            type: "GET",
+            url: "/organisation/{{org.name}}/funders",
+            dataType: "json",
+            data: obj,
+            success : generateFundersChart
+        })
+    }
+    
+    function generateFundersChart(data) {
+        // generate the default graph
+        doPie({
+            data: data, 
+            label_field : "term", 
+            value_field: "total", 
+            svg_selector : "#funding_breakdown_container svg",
+            name : "Funding Breakdown"
+        })
+    }
+    
+    // actually generate the funder pie chart
+    fundingBreakdown()
+});
     </script>
 
     <div class="row">
         <div class="span{% if org.logo != "" %}8{% else %}12{% endif %}">
-            <div class="hero-unit marketing-first">
+            <div class="hero-unit marketing-second" style="color: #ffffff">
                 <h1>{{org.name}}</h1>
+                <p style="font-size:1.2em;margin-bottom:20px;"><b>{{org.projects}}</b> projects, worth a total of <b>£{{org.totalfunding}}</b>, involving <b>{{org.collaborators}}</b> collaborators</p>
             </div>
         </div>
         {% if org.logo != "" %}
@@ -21,39 +185,47 @@
         </div>
         {% endif %}
     </div>
-
-
-    <div class="row" style="margin-top:30px;">
-        <div class="span3">
-            <div class="well" style="height:171px;">
-                <p style="font-size:1.2em;margin-bottom:20px;">We have found <b>{{org.projects}}</b> projects</p>
-                <p style="font-size:1.2em;margin-bottom:20px;">Worth a total of <b>£ {{org.totalfunding}}</b></p>
-                <p style="font-size:1.2em;margin-bottom:20px;">Involving <b>{{org.collaborators}}</b> collaborators</p>
+    
+    <div class="row">
+        <div class="span1">&nbsp;</div>
+        <div class="span5" style="border: 1px solid #cccccc">
+            <div class="row-fluid">
+            <div class="span12" id="funding_breakdown_container" style="padding-top: 10px">
+                <svg></svg>
+                <p style="text-align:center">Current breakdown in funding sources</p>
+            </div>
             </div>
         </div>
-        <div class="span3">
-            <a href="/organisation/{{ org.name }}/collaboration">
-            <div class="alert alert-info" style="height:193px;">
-                <h1 style="text-align:center;color:#5a5a5a;">collaborations</h1>
+        <div class="span5" style="border: 1px solid #cccccc">
+            <div class="row-fluid">
+            <div class="span12" id="collaboration_highlight_graph_container" style="padding-top: 10px">
+                <svg></svg>
+                <p style="text-align:center">Top current collaborators by number of projects</p>
+            </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row" style="margin-top:30px;">
+        <div class="span4">
+            
+            <!-- <div class="alert alert-info" style="height:193px;"> -->
+            <div class="alert marketing-first" style="height:193px;">
+                <a href="/organisation/{{ org.name }}/collaboration"><h1 style="color:#5a5a5a;">collaborations</h1></a>
                 <p class="lead" style="color:#5a5a5a;text-align:justify;">Explore collaborations and generate reports about current and historic projects for {{ org.name }}.</p>
             </div>
-            </a>
         </div>
-        <div class="span3">
-            <a href="/organisation/{{ org.name }}/benchmarking">
-            <div class="alert alert-info" style="height:193px;">
-                <h1 style="text-align:center;color:#5a5a5a;">benchmarking</h1>
+        <div class="span4">
+            <div class="alert marketing-first" style="height:193px;">
+                <a href="/organisation/{{ org.name }}/benchmarking"><h1 style="color:#5a5a5a;">benchmarking</h1></a>
                 <p class="lead" style="color:#5a5a5a;text-align:justify;">Compare {{ org.name }} with other organisations across a number of metrics.</p>
             </div>
-            </a>
         </div>
-        <div class="span3">
-            <a href="/organisation/{{ org.name }}/matching">
-            <div class="alert alert-info" style="height:193px;">
-                <h1 style="text-align:center;color:#5a5a5a;">new potential</h1>
+        <div class="span4">
+            <div class="alert marketing-first" style="height:193px;">
+                <a href="/organisation/{{ org.name }}/matching"><h1 style="color:#5a5a5a;">new potential</h1></a>
                 <p class="lead" style="color:#5a5a5a;text-align:justify;">Find great organisations with relevant expertise for {{ org.name }} to work with on new projects.</p>
             </div>
-            </a>
         </div>
     </div>
 

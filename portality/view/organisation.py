@@ -73,15 +73,15 @@ def organisation(mainorg, raw=False):
     # show this org snapshot data, top projects, recent funding by years, pubs
     # offer a download report overview of this org
 
-    #logo = mainorg.lower().replace(' ','_').replace("'",'').replace('university_','').replace('_university','').replace('_of','').replace('of_','').replace('_the','').replace('the_','').replace('_and','').replace('and_','').replace('_for','').replace('for_','').replace('_.','.') + '.png';
+    logo = mainorg.lower().replace(' ','_').replace("'",'').replace('university_','').replace('_university','').replace('_of','').replace('of_','').replace('_the','').replace('the_','').replace('_and','').replace('and_','').replace('_for','').replace('for_','').replace('_.','.') + '.png';
     
-    #logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
-    #logos=os.listdir(logofolder)
-    #if logo not in logos:
-    #    logo = ''
-    #else:
-    #    logo = '/static/logos/' + logo
-    logo = ""
+    logofolder = os.path.dirname(os.path.abspath( __file__ )).replace('/view','/static/logos')
+    logos=os.listdir(logofolder)
+    if logo not in logos:
+        logo = ''
+    else:
+        logo = '/static/logos/' + logo
+    # logo = ""
 
     # FIXME: should be in the models layer
     qry = {
@@ -302,6 +302,16 @@ def matching(mainorg, suffix=None):
 # Web API endpoints which provide generally useful functions for
 # the front-end
 #####################################################################
+
+@blueprint.route("/<mainorg>/funders")
+def funders(mainorg=None):
+    # extract the values from the request
+    start = request.values.get("start")
+    c.models.Record()
+    funders = c.funders(mainorg, start=start)
+    resp = make_response(json.dumps(funders))
+    resp.mimetype = "application/json"
+    return resp
 
 @blueprint.route("/<mainorg>/allfunders")
 def allfunders(mainorg=None):

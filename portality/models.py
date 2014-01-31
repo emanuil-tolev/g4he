@@ -240,7 +240,20 @@ class Record(DomainObject):
             t['formatted_total'] = "{:,.0f}".format(t['total'])
         
         return terms
+    
+    def funders(self, mainorg, start=None):
+        q = FundersQuery(mainorg, start)
+        result = self.query(q=q.query())
         
+        # get the terms stats facet
+        terms = result.get("facets", {}).get("funders", {}).get("terms", [])
+        
+        # format the money and return
+        for t in terms:
+            t['formatted_total'] = "{:,.0f}".format(t['total'])
+        
+        return terms
+    
     def collaboration_report(self, mainorg, collaboration_definition, 
                                 funder=None, collab_orgs=[], start=None, end=None, 
                                 lower=None, upper=None, category=None, status=None):
@@ -894,6 +907,46 @@ class InfoQuery(object):
             self.query["facets"] = {}
         self.query["facets"]["categories"] = deepcopy(self.grant_categories)
 
+class FundersQuery(object):
+
+    base_query = {
+        "query" : {
+            "bool" : {
+                "must" : []
+            }
+        },
+        "size" : 0,
+        "facets" : {
+            "funders" : {
+                "terms_stats" : {
+                    "key_field" : "primaryFunder.name.exact",
+                    "value_field" : "project.fund.valuePounds",
+                    "size" : 0
+                }
+            }
+        }
+    }
+    
+    org_template = { "term" : {"collaboratorOrganisation.canonical.exact" : None} }
+    start_template = { "range" : { "project.fund.end" : { "from" : "<start of range>" } } }
+
+    def __init__(self, mainorg, start):
+        self.mainorg = mainorg
+        self.start = start
+    
+    def query(self):
+        q = deepcopy(self.base_query)
+        
+        qo = deepcopy(self.org_template)
+        qo['term']["collaboratorOrganisation.canonical.exact"] = self.mainorg
+        q['query']['bool']['must'].append(qo)
+        
+        if self.start is not None:
+            qs = deepcopy(self.start_template)
+            qs['range']['project.fund.end']['from'] = self.start
+            q['query']['bool']['must'].append(qs)
+        
+        return q
 
 #############################################################################
 # Accounts/User objects
