@@ -30,6 +30,8 @@ $(document).ready(function() {
         }
         datums.push(bars)
         
+        // set the space up for the new chart
+        $(selector).empty()
         var height = (28 * limit) + 42 + 43
         $(selector).css("height", height + "px")
         
@@ -55,6 +57,47 @@ $(document).ready(function() {
 
             return chart;
         });
+    }
+    
+    function doPie(params) {
+        var data = params.data
+        var label_field = params.label_field
+        var value_field = params.value_field
+        var selector = params.svg_selector
+        var name = params["name"]
+        
+        var datums = []
+        var pie = {"key" : name, "values" : []}
+        
+        for (var i = 0; i < data.length; i++) {
+            var helping = {}
+            helping["label"] = data[i][label_field]
+            helping["value"] = data[i][value_field]
+            pie.values.push(helping)
+        }
+        datums.push(pie)
+        
+        // set the space up for the new chart
+        $(selector).empty()
+        $(selector).css("height", "365px")
+        
+        // generate the pie
+        nv.addGraph(function() {
+            var chart = nv.models.pieChart()
+                .x(function(d) { return d.label })
+                .y(function(d) { return d.value })
+                .showLabels(true)
+                .labelThreshold(.05)
+                .donut(true);
+
+            d3.select(selector)
+                .datum(datums)
+                .transition().duration(500)
+                .call(chart);
+    
+            return chart;
+        });
+        
     }
     
     ///////////////////////////////////////////////////////////////////
@@ -295,7 +338,8 @@ $(document).ready(function() {
         
         // now add the graph controls
         var frag = "<input type='radio' name='funder_graph_type' value='projects' checked='checked' id='funder_project_button'>&nbsp;Projects Funded&nbsp;&nbsp;&nbsp;&nbsp;"
-        frag += "<input type='radio' name='funder_graph_type' value='funding' id='funder_funding_button'>&nbsp;Total Funding for Collaborations"
+        frag += "<input type='radio' name='funder_graph_type' value='funding' id='funder_funding_button'>&nbsp;Total Funding for Collaborations&nbsp;&nbsp;&nbsp;&nbsp;"
+        frag += "<input type='radio' name='funder_graph_type' value='funding' id='funder_proportion_button'>&nbsp;Proportion of funding sources"
         $("#funder_graph_controls").html(frag);
         
         $("#funder_project_button").change(function() {
@@ -319,6 +363,17 @@ $(document).ready(function() {
                 name: "Total Funding for Collaborations",
                 svg_selector : "#funder_highlight_graph_container svg",
                 colour : "#6C3BFF"
+            })
+        })
+        
+        $("#funder_proportion_button").change(function() {
+            if (!$(this).attr("checked")) { return }
+            doPie({
+                data: funder_cache, 
+                label_field: "term", 
+                value_field: "total", 
+                name: "Proportion of funding sources",
+                svg_selector : "#funder_highlight_graph_container svg",
             })
         })
     }
