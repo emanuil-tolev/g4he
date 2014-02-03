@@ -90,7 +90,7 @@ def organisation(mainorg, raw=False):
                 "collaboratorOrganisation.canonical.exact": mainorg
             }
         },
-        "size": 0,
+        "size": 1,
         "facets": {
             "collaborators":{
                 "terms_stats" : {
@@ -115,6 +115,24 @@ def organisation(mainorg, raw=False):
         'collaborators': len(r.get('facets',{}).get('collaborators',{}).get('terms',[])) - 1,
         'totalfunding': "{:,.0f}".format(r.get('facets',{}).get('value_stats',{}).get('total',0))
     }
+    
+    # TODO: post codes should perhaps be processed into the index data, to save 
+    # processing them here
+    # get post code - lat long lookup table
+    pcll = json.load(open("postcodes.json"))
+    try:
+        orgs = r.get('hits',{}).get('hits',[])[0]['_source']['collaboratorOrganisation']
+        for o in orgs:
+            if o['canonical'] == mainorg:
+                outcode = o['organisation']['address']['postCode'].replace(' ','')
+        if len(outcode) == 7: outcode = outcode[0:4]
+        elif len(outcode) == 6: outcode = outcode[0:3]
+        pc = pcll[outcode]
+        org['lat'] = pc['lat']
+        org['lng'] = pc['lng']
+    except:
+        org['lat'] = 0
+        org['lng'] = 0
 
     # TODO: should really have an org object with the above info in it and it 
     # should be passed to the page instead of the mainorg string
@@ -130,7 +148,7 @@ def organisation(mainorg, raw=False):
 
 
 #####################################################################
-# matching report
+# matching (new potential) report
 #####################################################################
 # Web API endpoints associated with the matching/New Potential 
 # Report
