@@ -2,6 +2,12 @@
 
 {% block content %}
 
+<style type='text/css'>
+g.nv-series {
+    cursor: pointer
+}
+</style>
+
 <script type="text/javascript">
 $(document).ready(function() {
     
@@ -122,14 +128,19 @@ $(document).ready(function() {
         return false
     }
     
+    function getCollaborationOrder() {
+        return $("select[name=collaboration_highlight_order]").val()
+    }
+    
     // generate the top list of collaborators
     function topCollaborators(count) {
         // we always start by getting the collaboration definition and the range
         var cd = getCollaborationDefinition()
         var from = getCollaborationRange()
+        var order = getCollaborationOrder()
         
         // build the query object
-        var obj = {"count" : count, "collaboration_definition": cd.join(",")};
+        var obj = {"count" : count, "collaboration_definition": cd.join(","), "order" : order};
         if (from) {
             obj["start"] = from
         }
@@ -144,20 +155,35 @@ $(document).ready(function() {
     }
     
     function generateTopCollaboratorsGraph(data, limit) {
+        var order = getCollaborationOrder()
+        
+        var default_name = "Collaboration Funding"
+        var default_value_field = "total"
+        var funding_checked = "checked='checked'"
+        var projects_checked = ""
+        
+        if (order === "projects") {
+            default_name = "Project Count"
+            default_value_field = "count"
+            funding_checked = ""
+            projects_checked = "checked='checked'"
+        }
+    
         // generate the default graph
         doGraph({
             data: data, 
             limit: limit, 
             label_field : "term", 
-            value_field: "count", 
-            name : "Project Count",
+            value_field: default_value_field, 
+            name : default_name,
             svg_selector : "#collaboration_highlight_graph_container svg",
             colour : "#6C3BFF"
         })
         
         // now add the graph controls
-        var frag = "<input type='radio' name='collab_graph_type' value='projects' checked='checked' id='project_button'>&nbsp;Project Count&nbsp;&nbsp;&nbsp;&nbsp;"
-        frag += "<input type='radio' name='collab_graph_type' value='funding' id='funding_button'>&nbsp;Collaboration Funding"
+        var frag = "<input type='radio' name='collab_graph_type' value='funding' " + funding_checked + " id='funding_button'>&nbsp;Collaboration Funding&nbsp;&nbsp;&nbsp;&nbsp;"
+        frag += "<input type='radio' name='collab_graph_type' value='projects' " + projects_checked + " id='project_button'>&nbsp;Project Count"
+        
         $("#collab_graph_controls").html(frag);
         
         $("#project_button").change(function() {
@@ -281,6 +307,12 @@ $(document).ready(function() {
     })
     
     $("select[name=collaboration_highlight_range]").change(function() {
+        // just regenerate the table - all the parameters will be picked
+        // up from the page
+        topCollaborators(50)
+    })
+    
+    $("select[name=collaboration_highlight_order]").change(function() {
         // just regenerate the table - all the parameters will be picked
         // up from the page
         topCollaborators(50)
@@ -1437,7 +1469,12 @@ $(document).ready(function() {
             <option value="current">Current</option>
             <option value="alltime">All Time</option>
         </select>
-        Collaborations</h2>
+        Collaborations by
+        <select name="collaboration_highlight_order" style="width: 100px; font-weight: bold">
+            <option value="funding">Funding</option>
+            <option value="projects">Projects</option>
+        </select>
+        </h2>
     </div>
     <div class="span6">
         <select name="highlight_collab">
