@@ -497,6 +497,7 @@ def top(mainorg=None, form="json"):
     
     # extract the values from the request
     count = int(request.values.get("count", 0))
+    order = request.values.get("order", "projects")
     defn = request.values.get("collaboration_definition")
     collaboration_definition = None
     if defn is None:
@@ -507,7 +508,7 @@ def top(mainorg=None, form="json"):
     
     # pass the parameters to the Record model
     c = models.Record()
-    top_collabs = c.ordered_collaborators(mainorg, count, collaboration_definition, start=start)
+    top_collabs = c.ordered_collaborators(mainorg, count, collaboration_definition, start=start, order=order)
     
     # make the response and send it back
     if form == "raw":

@@ -2,8 +2,12 @@
 
 {% block content %}
 
+<style type='text/css'>
+g.nv-series {
+    cursor: pointer
+}
+</style>
 
-    <!-- launch graphview -->
     <script type="text/javascript">
 $(document).ready(function() {
 
@@ -39,7 +43,7 @@ $(document).ready(function() {
             var chart = nv.models.multiBarHorizontalChart()
               .x(function(d) { return d.label })
               .y(function(d) { return d.value })
-              .margin({top: 30, right: 30, bottom: 50, left: 175})
+              .margin({top: 30, right: 40, bottom: 50, left: 175})
               .showValues(false)
               .tooltips(true)
               .showControls(false);
@@ -64,8 +68,8 @@ $(document).ready(function() {
             data: data, 
             limit: limit, 
             label_field : "term", 
-            value_field: "count", 
-            name : "Project Count",
+            value_field: "total", 
+            name : "Collaboration Funding",
             svg_selector : "#collaboration_highlight_graph_container svg",
             colour : "#6C3BFF"
         })
@@ -78,7 +82,11 @@ $(document).ready(function() {
         var from = $.datepicker.formatDate("yy-mm-dd", new Date())
         
         // build the query object
-        var obj = {"count" : count, "collaboration_definition": cd.join(",")};
+        var obj = {
+            "count" : count, 
+            "collaboration_definition": cd.join(","), 
+            "order" : "funding"
+        };
         if (from) {
             obj["start"] = from
         }
@@ -192,7 +200,7 @@ $(document).ready(function() {
             <div class="row-fluid">
             <div class="span12" id="funding_breakdown_container" style="padding-top: 10px">
                 <svg></svg>
-                <p style="text-align:center">Current breakdown in funding sources</p>
+                <p style="text-align:center">Current breakdown in funding sources (click legend to enable/disable funders)</p>
             </div>
             </div>
         </div>
@@ -200,7 +208,7 @@ $(document).ready(function() {
             <div class="row-fluid">
             <div class="span12" id="collaboration_highlight_graph_container" style="padding-top: 10px">
                 <svg></svg>
-                <p style="text-align:center">Top current collaborators by number of projects</p>
+                <p style="text-align:center">Top collaborators by total current grant funding on collaborative projects</p>
             </div>
             </div>
         </div>

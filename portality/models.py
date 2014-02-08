@@ -153,7 +153,7 @@ class Record(DomainObject):
     # methods used for collaboration reports
     #######################################################################
 
-    def ordered_collaborators(self, mainorg, count, collaboration_definition, start=None):
+    def ordered_collaborators(self, mainorg, count, collaboration_definition, start=None, order="projects"):
         q = CollaborationQuery()
         q.set_main_org(mainorg)
         
@@ -218,7 +218,10 @@ class Record(DomainObject):
         for f in facet:
             f["formatted_total"] = "{:,.0f}".format(f['total'])
         
-        return sorted(facet, key=lambda f: f["count"], reverse=True)[1:]
+        if order == "projects":
+            return sorted(facet, key=lambda f: f["count"], reverse=True)[1:]
+        elif order == "funding":
+            return sorted(facet, key=lambda f: f["total"], reverse=True)[1:]
         
     def ordered_funders(self, mainorg, start=None):
         q = CollaborationQuery()
