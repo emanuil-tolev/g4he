@@ -118,12 +118,12 @@ var generate = function(event) {
         'contentType': 'application/json',
         'data': JSON.stringify(params),
         'success': function(data) {
-            var basis = '<h2>Keywords</h2><div class="well marketing-first" style="margin-top:17px;"><p>We generated and used these keywords for your matches. To restrict matches, remove some of these and re-generate (or provide completely new parameters above for a new match set).</p>'
+            var basis = '<h2>Your top ten best matches</h2><div class="well marketing-first" style="margin-top:17px;"><p>We generated and used these keywords for your matches. To restrict matches, remove some of these and re-generate (or provide completely new parameters above for a new match set).</p>'
             for ( var i = 0; i < data.params.length; i++ ) {
-                basis += '<p><a class="removeparam" href="#" style="color:red;">x</a> <a href="#" class="generatedkeyword">' + data.params[i] + '</a></p>'; 
+                basis += '<span style="margin-right:20px;"><a class="removeparam" href="#" style="color:red;">x</a> <a href="#" class="generatedkeyword">' + data.params[i] + '</a></span>'; 
             }
-            basis += '<p><a href="#" class="btn" id="regenerate">Re-generate matches</a></p></div>';
-            var matches = '<h2>Your top ten best matches</h2><div style="float:right;">';
+            basis += '<p style="margin-top:10px;"><a href="#" class="btn" id="regenerate">Re-generate matches</a></p></div>';
+            var matches = '<div style="float:right;">';
             matches += '<a href="/organisation/{{org}}/matching.csv?';
             for ( var param in params ) {
                 matches += param + '=';
@@ -142,7 +142,7 @@ var generate = function(event) {
             for ( var i = 0; i < data.new_potential.length; i++ ) {
                 var ts = data.new_potential[i];
                 matches += '<tr><td>';
-                matches += '<h2>' + ts.name + '<small> have a total of ' + ts.projects + ' projects worth £' + ts.totalfunding + '</small>' + '</h2>';
+                matches += '<h2>' + ts.name + '<small> ' + ts.projects + ' projects worth £' + ts.totalfunding + '</small>' + '</h2>';
                 matches += '<p>View <a class="showexpansion" href="#">' + ts.related.length + ' potentially relevant project titles</a> or ';
                 matches += '<a target="_blank" href="/organisation/' + ts.name + '">read more about ' + ts.name + '</a></p>';
                 matches += '<div class="expander" style="display:none;">';
@@ -180,8 +180,42 @@ var slider = function(event) {
 $('input, select').bind('focus',slider);
 
 
-}); 
+
+var buildmap = function() {
+    var width = 500,
+        height = 800;
+
+    var projection = d3.geo.mercator()
+        .center([0, 5 ])
+        .scale(900)
+        .rotate([-180,0]);
+
+    var svg = d3.select("#mapspace").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    var path = d3.geo.path()
+        .projection(projection);
+
+    var g = svg.append("g");
+
+    // load and display the World
+    d3.json("/static/world-110m2.json", function(error, topology) {
+        g.selectAll("path")
+          .data(topojson.object(topology, topology.objects.countries)
+              .geometries)
+        .enter()
+          .append("path")
+          .attr("d", path)
+    });
+}
+
+});
 </script>
+
+
+
+
 
 <div class="row-fluid">
     <div class="span12">
@@ -237,12 +271,19 @@ $('input, select').bind('focus',slider);
 <hr></hr>
 
 <div class="row-fluid">
-    <div class="span9">
+    <div class="span12">
+        <div id="basis">
+        </div>
+    </div>
+</div>
+
+<div class="row-fluid">
+    <div class="span7">
         <div id="matches">
         </div>
     </div>
-    <div class="span3">
-        <div id="basis">
+    <div class="span5">
+        <div id="mapspace">
         </div>
     </div>
 </div>
