@@ -1,12 +1,17 @@
-import portality.models, workflows, cerif
+# import portality.models, workflows, cerif
+
+from portality import models
+from portality.gtrindexer import workflows
+from portality.gtrindexer import cerif
 
 def project_handler(project, cerif_project):
     proj = models.Project(**project.as_dict())
     print "saving data from " + project.url()
     proj.save()
-    cproj = models.CerifProject(**cerif_project.as_dict())
-    print "saving data from " + cerif_project.url()
-    cproj.save()
+    if cerif_project is not None:
+        cproj = models.CerifProject(**cerif_project.as_dict())
+        print "saving data from " + cerif_project.url()
+        cproj.save()
     
 def person_handler(person):
     pers = models.Person(**person.as_dict())
@@ -27,7 +32,7 @@ def publication_handler(publication):
 def indexgtr():
     workflows.crawl("http://gtr.rcuk.ac.uk/", min_request_gap=0,
         project_limit=0, project_callback=project_handler, pass_cerif_project=True,
-        person_limit=0, person_callback=person_handler, 
+        person_limit=None, person_callback=person_handler, 
         organisation_limit=0, organisation_callback=organisation_handler, 
         publication_limit=0, publication_callback=publication_handler
     )

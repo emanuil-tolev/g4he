@@ -906,6 +906,8 @@ class PersonJSONDAO(NativeJSONDAO):
         super(PersonJSONDAO, self).__init__(raw)
     
     def _person(self):
+        if "personOverview" in self.raw:
+            return self.raw.get("personOverview", {}).get("person", {})
         return self.raw.get("person", {})
     
     def url(self):

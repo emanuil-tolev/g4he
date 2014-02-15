@@ -23,7 +23,9 @@ class GtRCerif(GtR):
         
     def project(self, uuid):
         url = self.project_base + uuid
+        #print url
         raw, _ = self._api(url)
+        #print raw
         if raw is not None:
             return Project(self, raw)
         return None

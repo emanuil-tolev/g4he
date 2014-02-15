@@ -1,5 +1,5 @@
 import logging, time
-import native, cerif
+from portality.gtrindexer import native, cerif
 
 log = logging.getLogger(__name__)
 
