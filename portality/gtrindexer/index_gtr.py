@@ -3,6 +3,7 @@
 from portality import models
 from portality.gtrindexer import workflows
 from portality.gtrindexer import cerif
+from portality import settings
 
 def project_handler(project, cerif_project):
     proj = models.Project(**project.as_dict())
@@ -28,13 +29,28 @@ def publication_handler(publication):
     print "saving data from " + publication.url()
     pub.save()
 
+def initialise_index():
+    mappings = settings.GTR_MAPPINGS
+    i = str(settings.ELASTIC_SEARCH_HOST).rstrip('/')
+    i += '/' + settings.GTR_INDEX
+    for key, mapping in mappings.iteritems():
+        im = i + '/' + key + '/_mapping'
+        exists = requests.get(im)
+        if exists.status_code != 200:
+            ri = requests.post(i)
+            r = requests.put(im, json.dumps(mapping))
+            print key, r.status_code
 
 def indexgtr():
+    # ensure the index with the right mappings exists
+    initialise_index()
+    
+    # use the crawler to crawl all of the gtr data
     workflows.crawl("http://gtr.rcuk.ac.uk/", min_request_gap=0,
-        project_limit=0, project_callback=project_handler, pass_cerif_project=True,
+        project_limit=None, project_callback=project_handler, pass_cerif_project=True,
         person_limit=None, person_callback=person_handler, 
-        organisation_limit=0, organisation_callback=organisation_handler, 
-        publication_limit=0, publication_callback=publication_handler
+        organisation_limit=None, organisation_callback=organisation_handler, 
+        publication_limit=None, publication_callback=publication_handler
     )
 
     # index the cerif classes
