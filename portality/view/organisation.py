@@ -209,6 +209,9 @@ def matching(mainorg, suffix=None):
             #    pass
 
     potential = []
+    nodes = [{"type":"param","color":"#666","value":1,"label":i} for i in params]
+    links = []
+    linked = []
     # perform the search with the defined params and build a list of matching orgs
     if len(params) > 0 or len(person) > 0:
         qry = {
@@ -271,12 +274,20 @@ def matching(mainorg, suffix=None):
                     canonicals = [l.get('canonical','') for l in i['_source'].get('collaboratorOrganisation',[])]
                     title = i['_source']['project']['title']
                     if collab in canonicals and mainorg not in canonicals and title not in p['related']:
-                        p['related'].append(title)
+                        p['related'].append({"title":title,"id":i['_id'],"abstract":i['_source']['project'].get('abstractText',"")})
+                    for k, param in enumerate(params):
+                        if param in i['_source']['project']['title'] + " " + i['_source']['project'].get('abstractText',""):
+                            if param + collab not in linked:
+                                links.append({'source':k,'target':len(nodes)})
+                                linked.append(param + collab)
                 potential.append(p)
+                nodes.append({"type":"org","label":collab,"color":"#f9ce50","value":len(p['related'])+2})
                 
         
     matchinfo = {
         "new_potential": potential,
+        "nodes": nodes,
+        "links": links,
         "params": params,
         "person": person,
         "project": project,

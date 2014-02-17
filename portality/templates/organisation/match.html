@@ -90,6 +90,119 @@ var showexpansion = function(event) {
     $(this).parent().siblings('.expander').toggle();
 }
 
+
+var buildmap = function(input) {
+    $('#mapspace').html('<div id="mappanel"></div>');
+    var obj = $('#mapspace');
+    
+    var nodes = input.nodes;
+    var links = input.links;
+
+    // build the vis area
+    var w = obj.width();
+    var h = obj.height();
+    var vis = d3.select("#mappanel")
+        .append("svg:svg")
+        .attr("width", w)
+        .attr("height", h)
+        .attr("pointer-events", "all")
+        .append('svg:g')
+        .call(d3.behavior.zoom().on("zoom", redraw))
+        .append('svg:g');
+
+    vis.append('svg:rect')
+        .attr('width', w)
+        .attr('height', h)
+        .attr('fill', 'transparent');
+
+    // fade in whenever transitions occur
+    vis.style("opacity", 1e-6)
+        .transition()
+        .duration(1000)
+        .style("opacity", 1);
+
+    // redraw on zoom
+    function redraw() {
+        vis.attr("transform",
+            "translate(" + d3.event.translate + ")"
+            + " scale(" + d3.event.scale + ")"
+        );
+    }
+
+    // start the force layout
+    var force = d3.layout.force()
+        .charge(-2000)
+        .linkDistance(200)
+        .nodes(nodes)
+        .links(links)
+        .size([w, h])
+        .start();
+
+    // put links on it
+    var link = vis.selectAll("line.link")
+        .data(links)
+        .enter().append("svg:line")
+        .attr("class", "link")
+        .attr("stroke", "#ccc")
+        .attr("stroke-opacity", 0.8)
+        .style("stroke-width", function(d) { return Math.sqrt(d.value); })
+        .attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    // put the nodes on it
+    var dom = d3.extent(nodes, function(d) {
+        return d.value;
+    });
+    var cr = d3.scale.sqrt().range([5, 25]).domain(dom);
+    var node = vis.selectAll("circle.node")
+        .data(nodes)
+        .enter().append("svg:circle")
+        .attr("class", "node")
+        .attr("name", function(d) { return d.label; })
+        .attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; })
+        .attr("r", function(d) { return cr(d.value); })
+        .style("fill", function(d) { return d.color; })
+        .call(force.drag)
+        .on("click",function(d) { if ( d.type == "org" ) { window.location = '/organisation/' + d.label; } })
+
+    // put a hover label on
+    node.append("svg:title")
+        .text(function(d) { return d.hoverlabel; });
+
+    // make the cursor a click pointer whenever hovering a node
+    $('.node').css({"cursor":"pointer"});
+
+    // put a label next to each node
+    // TODO: change to only show labels on question objects
+    var texts = vis.selectAll("text.label")
+        .data(nodes)
+        .enter().append("text")
+        .attr("class", "svglabel")
+        .attr("fill", "#333")
+        .text(function(d) {  return d.label; });
+
+    // define the changes that happen when the diagram ticks over
+    force.on("tick", function() {
+        link.attr("x1", function(d) { return d.source.x; })
+            .attr("y1", function(d) { return d.source.y; })
+            .attr("x2", function(d) { return d.target.x; })
+            .attr("y2", function(d) { return d.target.y; });
+
+        node.attr("cx", function(d) { return d.x; })
+            .attr("cy", function(d) { return d.y; });
+
+        texts.attr("transform", function(d) {
+            return "translate(" + (d.x - cr(d.value) + 15) + "," + (d.y + cr(d.value) + 5) + ")";
+        });
+
+    });
+        
+}
+
+
 var generate = function(event) {
     event.preventDefault();
     var params = {
@@ -142,12 +255,12 @@ var generate = function(event) {
             for ( var i = 0; i < data.new_potential.length; i++ ) {
                 var ts = data.new_potential[i];
                 matches += '<tr><td>';
-                matches += '<h2>' + ts.name + '<small> ' + ts.projects + ' projects worth £' + ts.totalfunding + '</small>' + '</h2>';
+                matches += '<h2>' + ts.name + '<br><small> ' + ts.projects + ' projects worth £' + ts.totalfunding + '</small>' + '</h2>';
                 matches += '<p>View <a class="showexpansion" href="#">' + ts.related.length + ' potentially relevant project titles</a> or ';
                 matches += '<a target="_blank" href="/organisation/' + ts.name + '">read more about ' + ts.name + '</a></p>';
                 matches += '<div class="expander" style="display:none;">';
                 for ( var t in ts.related ) {
-                    matches += '<p>' + ts.related[t] + '</p>';
+                    matches += '<p><a href="/project/' + ts.related[t].id + '" target="_blank">' + ts.related[t].title + '</a> - ' + ts.related[t].abstract + '</p><hr></hr>';
                 }
                 matches += '</div>';
                 matches += '</td></tr>';
@@ -158,6 +271,7 @@ var generate = function(event) {
             $('.showexpansion').bind('click',showexpansion);
             $('#regenerate').bind('click',generate);
             $('.removeparam').unbind('click',removeparam).bind('click',removeparam);
+            buildmap(data);
             $('html, body').animate({
                 scrollTop: $("#basis").offset().top
             }, 500);
@@ -180,35 +294,6 @@ var slider = function(event) {
 $('input, select').bind('focus',slider);
 
 
-
-var buildmap = function() {
-    var width = 500,
-        height = 800;
-
-    var projection = d3.geo.mercator()
-        .center([0, 5 ])
-        .scale(900)
-        .rotate([-180,0]);
-
-    var svg = d3.select("#mapspace").append("svg")
-        .attr("width", width)
-        .attr("height", height);
-
-    var path = d3.geo.path()
-        .projection(projection);
-
-    var g = svg.append("g");
-
-    // load and display the World
-    d3.json("/static/world-110m2.json", function(error, topology) {
-        g.selectAll("path")
-          .data(topojson.object(topology, topology.objects.countries)
-              .geometries)
-        .enter()
-          .append("path")
-          .attr("d", path)
-    });
-}
 
 });
 </script>
@@ -278,12 +363,12 @@ var buildmap = function() {
 </div>
 
 <div class="row-fluid">
-    <div class="span7">
+    <div class="span6">
         <div id="matches">
         </div>
     </div>
-    <div class="span5">
-        <div id="mapspace">
+    <div class="span6">
+        <div id="mapspace" style="width:100%;min-height:500px;">
         </div>
     </div>
 </div>
