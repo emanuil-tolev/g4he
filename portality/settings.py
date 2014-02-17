@@ -16,7 +16,8 @@ DEBUG = True
 PORT = 5003
 
 # elasticsearch settings
-ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200" # remember the http:// or https://
+# ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200" # remember the http:// or https://
+ELASTIC_SEARCH_HOST = "http://localhost:9200"
 ELASTIC_SEARCH_DB = "g4hea"
 INITIALISE_INDEX = False # whether or not to try creating the index and required index types on startup
 
@@ -86,6 +87,7 @@ GTR_MAPPINGS['organisation'] = {'organisation':GTR_MAPPINGS['project']['project'
 GTR_MAPPINGS['publication'] = {'publication':GTR_MAPPINGS['project']['project']}
 GTR_MAPPINGS['cerifproject'] = {'cerifproject':GTR_MAPPINGS['project']['project']}
 GTR_MAPPINGS['cerifclass'] = {'cerifclass':GTR_MAPPINGS['project']['project']}
+GTR_MAPPINGS['personhistory'] = {'personhistory':GTR_MAPPINGS['project']['project']}
 
 
 
