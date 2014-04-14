@@ -185,6 +185,7 @@ $(document).ready(function() {
         event.preventDefault();
         var nm = $(this).text();
         $('#thanks').hide();
+        $('.checker').hide();
         $('#checkpoint').show();
         $('#spellname').val(nm);
         $('#checklink').attr('href',nm);
@@ -198,6 +199,14 @@ $(document).ready(function() {
         $('#thanks').show();
     };
     $('#submitcheck').bind('click',submitcheck);
+
+    var cancelcheck = function(event) {
+        event.preventDefault();
+        $('#checkpoint').hide();
+        $('#thanks').hide();
+        $('.checker').show();
+    };
+    $('#cancelcheck').bind('click',cancelcheck);
 
 });
     </script>
@@ -228,7 +237,8 @@ $(document).ready(function() {
             <p>Tell us about this organisation - change the spelling below if necessary.</p>
             <textarea id="spellname" style="width:100%"></textarea>
             <input type="checkbox" id="speltwrong"> it is spelt wrong<br>
-            <input type="checkbox" id="sameas"> this is the same organisation<br>
+            <input type="checkbox" id="sameas"> this is the same organisation as {{org.name}}<br>
+            <input type="checkbox" id="subsidiary"> this is a department / subsidiary of {{org.name}}<br>
             <input type="checkbox" id="multiple"> there are multiple names in it<br>
             <input type="checkbox" id="other"> something else is wrong<br>
             <textarea id="message" style="width:100%;">tell us more, if you want, to let us know what you think the problem is.</textarea><br>
@@ -236,6 +246,7 @@ $(document).ready(function() {
             <p>Still not sure? Don't worry, we won't change anything based on your feedback alone - 
             we will check it with what we hear from other people too.</p>
             <button class="btn" id="submitcheck">Submit your updates</button>
+            <button class="btn" id="cancelcheck">Cancel</button>
             </div>
             
             {% for c in checklist %}

@@ -137,7 +137,7 @@ def organisation(mainorg, raw=False):
     # get similar names for user fixing
     # TODO: this should be in model too
     similar = dropdowns('record','collaboratorOrganisation.canonical')
-    n = mainorg.lower().replace('university','').replace('of','').replace('the','').replace(' ','').replace("'",'').replace('.','')
+    n = mainorg.lower().replace('university','').replace('college','').replace('of','').replace('the','').replace(' ','').replace('.','')
     checklist = []
     for s in similar:
         if mainorg != s and n in s.lower():
