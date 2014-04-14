@@ -134,6 +134,15 @@ def organisation(mainorg, raw=False):
         org['lat'] = 0
         org['lng'] = 0
 
+    # get similar names for user fixing
+    # TODO: this should be in model too
+    similar = dropdowns('record','collaboratorOrganisation.canonical')
+    n = mainorg.lower().replace('university','').replace('of','').replace('the','').replace(' ','').replace("'",'').replace('.','')
+    checklist = []
+    for s in similar:
+        if mainorg != s and n in s.lower():
+            checklist.append(s)
+
     # TODO: should really have an org object with the above info in it and it 
     # should be passed to the page instead of the mainorg string
     if raw:
@@ -143,7 +152,7 @@ def organisation(mainorg, raw=False):
         resp.mimetype = "application/json"
         return resp
     else:
-        return render_template('organisation/org.html', org=org)
+        return render_template('organisation/org.html', org=org, checklist=checklist)
 
 
 
@@ -321,7 +330,7 @@ def matching(mainorg, suffix=None):
         resp.headers['Content-Disposition'] = 'attachment; filename="' + mainorg + '_new_potential_report.csv"'
         return resp
     else:
-        return render_template('organisation/match.html', org=mainorg, matchinfo=matchinfo)
+        return render_template('organisation/match.html', mainorg=mainorg, matchinfo=matchinfo)
 
 
 

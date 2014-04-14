@@ -78,12 +78,26 @@
             </button>
             <a class="brand" href="/">G4HE</a>
             <div class="nav-collapse collapse">
+              {% if org %}
               <ul class="nav">
-                <li><a href="/#what">What is G4HE?</a></li>
-                <li><a href="/organisation">Explore G4HE</a></li>
-                <li><a href="/#about">About us</a></li>
-                <li><a href="/#contact">Contact G4HE</a></li>
+                <li><a href="/organisation/{{org.name}}">{{org.name}}</a></li>
+                <li><a href="/organisation/{{org.name}}/collaboration">collaborations</a></li>
+                <li><a href="/organisation/{{org.name}}/benchmarking">benchmarking</a></li>
+                <li><a href="/organisation/{{org.name}}/matching">new potential</a></li>
               </ul>
+              {% endif %}
+              {% if mainorg %}
+              <ul class="nav">
+                <li><a href="/organisation/{{mainorg}}">{{mainorg}}</a></li>
+                <li {% if "collaboration" in request.url %}class="active"{% endif %}><a href="/organisation/{{mainorg}}/collaboration">collaborations</a></li>
+                <li {% if "benchmarking" in request.url %}class="active"{% endif %}><a href="/organisation/{{mainorg}}/benchmarking">benchmarking</a></li>
+                <li {% if "matching" in request.url %}class="active"{% endif %}><a href="/organisation/{{mainorg}}/matching">new potential</a></li>
+              </ul>
+              {% endif %}
+              <ul class="nav pull-right">
+                <li><a href="/#about">About G4HE</a></li>
+              </ul>
+
             </div><!--/.nav-collapse -->
           </div><!-- /.navbar-inner -->
         </div><!-- /.navbar -->
@@ -118,15 +132,10 @@
             <a href="#"> ^^^ </a>
         </p>
         
-        <p>&copy; 2013 Cottage Labs LLP &middot; on behalf of the <a href="http://jisc.ac.uk">Jisc</a> G4HE project.</p>
+        <p>&copy; 2014 Cottage Labs LLP &middot; on behalf of the <a href="http://jisc.ac.uk">Jisc</a> G4HE project.</p>
+        <p>The content of this website is licensed under a <a class="hidden-print" rel="license" target="_blank" href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a></p>
         <p>This service is running at <a href="http://cottagelabs.com">Cottage Labs</a>. 
             <a href="mailto:us@cottagelabs.com">Contact us</a> if you have technical issues.</p>
-        <p>
-            <a href="http://brunel.ac.uk">Brunel University</a><br>
-            <a href="http://cam.ac.uk">University of Cambridge</a><br>
-            <a href="http://www.ebase.bcu.ac.uk/">Evidence base</a> at <a href="http://bcu.ac.uk">Birmingham City University</a><br>
-            <a href="http://www.rcuk.ac.uk">Research Councils UK</a><br>
-        </p>
 
       </footer>
 

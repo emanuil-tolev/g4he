@@ -237,7 +237,7 @@ var generate = function(event) {
             }
             basis += '<p style="margin-top:10px;"><a href="#" class="btn" id="regenerate">Re-generate matches</a></p></div>';
             var matches = '<div style="float:right;">';
-            matches += '<a href="/organisation/{{org}}/matching.csv?';
+            matches += '<a href="/organisation/{{mainorg}}/matching.csv?';
             for ( var param in params ) {
                 matches += param + '=';
                 var first = true;
@@ -298,17 +298,6 @@ $('input, select').bind('focus',slider);
 });
 </script>
 
-
-
-
-
-<div class="row-fluid">
-    <div class="span12">
-        <div class="hero-unit">
-            <h1>New Potential for <br><a href="/organisation/{{ org }}">{{ org }}</a></h1>
-        </div>
-    </div>
-</div>
 
 <div class="row-fluid">
     <div class="span4">

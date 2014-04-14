@@ -98,10 +98,11 @@ body {
 
 
 /* Center align the text within the three columns below the carousel */
-.marketing .span4 {
+.marketing .market {
     text-align: center;
     border-radius: 5px;
     margin-bottom:40px;
+    padding-bottom:1px;
 }
 .marketing h2 {
     margin-top:10px;
@@ -110,7 +111,7 @@ body {
     font-size:34px;
     color:#5a5a5a;
 }
-.marketing .span4 p {
+.marketing .market p {
     margin-left: 10px;
     margin-right: 10px;
     margin-bottom:20px;
@@ -166,7 +167,7 @@ body {
     font-size:4em;
     font-weight:bold;
     height:90px;
-    width:50%;
+    width:100%;
     padding:0 0 10px 2px;
     margin-bottom:50px;
     margin-right:20px;

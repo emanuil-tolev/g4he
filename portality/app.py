@@ -3,10 +3,12 @@ from flask import Flask, request, abort, render_template
 from flask.views import View
 from flask.ext.login import login_user, current_user
 
-import json
+import json, os
 
 import portality.models as models
 from portality.core import app, login_manager
+
+from portality.view.forms import dropdowns
 
 
 from portality.view.account import blueprint as account
@@ -68,6 +70,17 @@ def page_not_found(e):
         
 @app.route('/')
 def index():
+
+    #logofolder = os.path.dirname(os.path.abspath( __file__ )) + '/static/logos'
+    #logos=sorted(os.listdir(logofolder))
+    logos = []
+
+    return render_template(
+        'index.html',
+        logos=logos,
+        orgs=json.dumps(dropdowns('record','collaboratorOrganisation.canonical'))
+    )
+
     return render_template('index.html')
     
 

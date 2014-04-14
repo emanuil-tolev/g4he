@@ -2,78 +2,110 @@
 
 {% block content %}
 
+<script type="text/javascript">
+$(document).ready(function() {
 
-    <div class="row" style="margin-bottom:60px;">
+    if ( window.location.href.indexOf('#') == -1 ) {
+        $('#getorg').hide();
+        $('body').children().css('visibility','hidden');
+        $('#logoport').css('visibility','visible').fadeIn('slow');
+        setTimeout(function() {
+            $('body').children().css('visibility','visible').fadeIn('slow');
+            $('#getorg').show('slow');
+            $('#logoport').hide('slow');
+            $('#whoareyou').focus();
+            $('body').scrollTop( 0 );
+        }, 1000);
+    }
+
+    var orgs = {{orgs|safe}};
+    $('#whoareyou').autocomplete({
+        'source':orgs,
+        'minLength':0,  
+        'select': function( event, ui ) {
+            window.location = '/organisation/' + ui.item.value;
+            return false;
+        }
+    });
+    
+    var clicklogo = function(event) {
+        event.preventDefault();
+        $('#whoareyou').val($(this).attr('href').replace('.png','').replace(/_/g,' '));
+        $("#whoareyou").focus().trigger('keydown');
+    }
+    $('.clicklogo').bind('click',clicklogo);
+    
+    $('#am-container').montage({
+        liquid: true,
+        fillLastRow: false,
+        fixedHeight:80
+    });
+
+
+});
+</script>
+
+
+
+
+    <div class="row" style="margin-bottom:60px;" id="logoport">
         <div class="span12">
             <img src="/static/g4he_logo_+text.jpg" class="g4he" alt="">
         </div>
     </div>
 
-    <a name="what"></a>
+
     <div class="container marketing">
 
-      <!-- Three columns of text below the carousel -->
-      <div class="row" style="margin-top:30px;">
-        <div class="span4 marketing-first">
-          <h2>Explore research data</h2>
-          <p>Check out what research is going on, find out about the funding, and take a look at the outcomes. Visualise 
-          your own research projects and relationships and learn more about your community</p>
-        </div><!-- /.span4 -->
-        <div class="span4 marketing-second">
-          <h2>Make research easier</h2>
-          <p>Get some value out of all your research admin responsibilities &mdash; find out how good the public data 
-          about your research is, see who you should be collaborating with, and benchmark your successes.</p>
-        </div><!-- /.span4 -->
-        <div class="span4">
-          <img class="img thumbnail" src="/static/partner_logos.jpg" style="height:140px;">
-        </div><!-- /.span4 -->
+      <div id="getorg" style="margin-bottom:100px;">
+      <!-- Org search bar -->
+      <div class="row" style="margin-top:30px;margin-bottom:20px;">
+        <div class="span12">
+            <div class="clearfix">
+            <input type="text" name="whoareyou" id="whoareyou">
+            </div>
+            <div class="am-container" id="am-container" style="width:100%;">
+            {% for logo in logos %}
+                <a href="{{logo}}" class="clicklogo thumbnail" style="float:left;">
+                    <img src="/static/logos/{{logo}}" class="img" style="background-color:white;max-width:250px;overflow:hidden;">
+                </a>
+            {% endfor %}
+            </div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="span4 market">
+            <div class="thumbnail" style="height:139px;">
+                <p class="lead" style="font-weight:bold;">Search for your organisation by typing the name 
+                above, then selecting from the dropdown list options, and 
+                we will have a quick look to see what information we have available.</p>
+            </div>
+        </div>
+        <div class="span4 market marketing-first">
+            <h2>Explore research data</h2>
+            <p>Check out what research is going on, find out about the funding, and take a look at the outcomes. Visualise 
+            your own research projects and relationships and learn more about your community</p>
+        </div>
+        <div class="span4 market marketing-second">
+            <h2>Make research easier</h2>
+            <p>Get some value out of all your research admin responsibilities &mdash; find out how good the public data 
+            about your research is, see who you should be collaborating with, and benchmark your successes.</p>
+        </div>
+
       </div><!-- /.row -->
 
+      </div><!-- getorg-->
 
 
-      <div class="featurette">
-        <table class="table table-striped table-bordered">
-            <thead>
-                <tr>
-                    <th><h2 class="featurette-heading">Things you need to do</h2></th>
-                    <th style="width:50%;"><h2 class="featurette-heading"><span class="muted">How G4HE will help</span></h2></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Report to senior management about key collaborations within our grant portfolio, so we can identify institutions with whom to build partnerships.</td>
-                    <td>Yep - we can currently show you how many collaborators you have and what the total value of projects is. Much more in-depth collaboration reporting is coming very soon.</td>
-                </tr>
-                <tr>
-                    <td>See who we are collaborating with in particular fields, and find other institutions in the same field that we are not already collaborating with.</td>
-                    <td>Indeed - coming soon.</td>
-                </tr>
-                <tr>
-                    <td>See number and value of collaborations with commercial partners to get an idea of the value and extent of our knowledge transfer activities - which is useful for internal and external (e.g. HE-BCI) reporting.</td>
-                    <td>Sure, why not - we wil help you identify commercial partners then we can put a value to these activities.</td>
-                </tr>
-                <tr>
-                    <td>Benchmark funding awarded between groups of researchers at my institution with groups at other institutions to ensure that we are performing at the expected level.</td>
-                    <td>Nearly there... this will come after we finish the collaborations work.</td>
-                </tr>
-                <tr>
-                    <td>see how much a department has brought in because it helps me show the success of our research groups</td>
-                    <td>Not a problem - define your departments and we will help you work this out.</td>
-                </tr>
-                <tr>
-                    <td></td>
-                    <td><p style="font-size:20px;"><strong>Sound good? <a href="/organisation">Try it out</a></strong></p></td>
-                </tr>
-            </tbody>
-        </table>
-        
-      </div>
+
+      <hr class="featurette-divider"></hr>
 
       <a name="about"></a>
       <div class="featurette">
         <h2 class="featurette-heading">About the project. <span class="muted">Where we came from.</span></h2>
         
-        <p class="lead">G4HE is a <a href="http://jisc.ac.uk">Jisc</a> project with the 
+        <p class="lead">G4HE was a <a href="http://jisc.ac.uk">Jisc</a> project with the 
         aim of improving information exchange between Higher Education Institutions and Research Councils, 
         by giving something useful in return for all the effort that goes into creating, maintaining, and collecting this research data.</p>
 
@@ -98,17 +130,20 @@
       <div class="featurette">
         <h2 class="featurette-heading">Contact us. <span class="muted">Get involved.</span></h2>
         
-        <p class="lead">We are quite a new project, and we would love to hear from you if 
-        you want to tell us something about our service or to get involved. Check out our 
-        <a href="http://g4he.wordpress.com">project blog</a> for more information.</p>
+        <p class="lead">This is quite a new service, and we would love to hear from you if 
+        you want to tell us something about our service or to get involved.</p>
 
         <p class="lead">There is an open <a href="">google group</a> that you can join for discussion and feedback.<br>
         Also we have a testing group - if you want to join it
-        <a href="mailto:bex@cottagelabs.com">let us know</a>.</p>
-        
+        <a href="mailto:us@cottagelabs.com">let us know</a>.</p>
+
         <p class="lead">And there is the <a href="http://github.com/g4he/g4he">code repository</a>, 
         all the stuff we have written to make this work - visit the 
         <a href="http://github.com/g4he/g4he/issues">issue tracker</a> if you want to point out a problem.</p>
+        
+        <p class="lead">Check out the old <a href="http://g4he.wordpress.com">blog</a> for information 
+        about the Jisc project that this service was developed as a part of.</p>
+        
       </div>
 
       <hr class="featurette-divider"></hr>
