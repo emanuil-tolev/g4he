@@ -85,5 +85,16 @@ def index():
     
 
 if __name__ == "__main__":
+    import sys
+    pycharm_debug = app.config.get('DEBUG_PYCHARM', False)
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '-d':
+            pycharm_debug = True
+
+    if pycharm_debug:
+        app.config['DEBUG'] = False
+        import pydevd
+        pydevd.settrace(app.config.get('DEBUG_PYCHARM_SERVER', 'localhost'), port=app.config.get('DEBUG_PYCHARM_PORT', 6000), stdoutToServer=True, stderrToServer=True)
+
     app.run(host='0.0.0.0', debug=app.config['DEBUG'], port=app.config['PORT'])
 
