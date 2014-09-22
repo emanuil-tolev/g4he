@@ -16,8 +16,9 @@ DEBUG = True
 PORT = 5003
 
 # elasticsearch settings
-# ELASTIC_SEARCH_HOST = "http://test.cottagelabs.com:9200" # remember the http:// or https://
-ELASTIC_SEARCH_HOST = "http://localhost:9200"
+#ELASTIC_SEARCH_HOST = "http://g4he.cottagelabs.com:9200"  # remember the http:// or https://
+ELASTIC_SEARCH_HOST = "http://localhost:9200"  # remember the http:// or https://
+
 ELASTIC_SEARCH_DB = "g4hea"
 INITIALISE_INDEX = False # whether or not to try creating the index and required index types on startup
 
