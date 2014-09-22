@@ -6,6 +6,9 @@ src*
 build/*
 dist/*
 
+# PyCharm
+.idea
+
 app.cfg
 
 media/*
